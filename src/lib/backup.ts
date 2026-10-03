@@ -80,7 +80,10 @@ export async function importBackup(json: unknown): Promise<Record<TableName, num
   const counts = {} as Record<TableName, number>
   await db.transaction('rw', BACKUP_TABLES.map((t) => db.table(t)), async () => {
     for (const t of BACKUP_TABLES) {
-      const rows = t === 'expenses' ? expenses : file.tables[t]
+      const rows =
+        t === 'expenses' ? expenses
+        : t === 'debts' ? (file.tables.debts as Record<string, unknown>[]).map((d) => ({ payments: [], ...d })) // backup-e para v3
+        : file.tables[t]
       await db.table(t).clear()
       await db.table(t).bulkAdd(rows)
       counts[t] = rows.length

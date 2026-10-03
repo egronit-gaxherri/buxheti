@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useBudgets, useCategories, useIncomes, useLimits, useMonth, usePeople, useRecurring } from './db/hooks'
+import { useBudgets, useCategories, useDebts, useIncomes, useLimits, useMonth, usePeople, useRecurring } from './db/hooks'
 import { deleteTransfer, remainingFor, reopenMonth, runRecurring, undoExpenses } from './db/actions'
 import { loadMonthData } from './db/queries'
 import type { Expense, Transfer } from './db/schema'
@@ -22,6 +22,10 @@ import { CloseMonthSheet } from './components/CloseMonthSheet'
 import { SecurityPage } from './components/SecurityPage'
 import { PeoplePage } from './components/PeoplePage'
 import { ContributorsCard } from './components/ContributorsCard'
+import { DebtsPage, dueText } from './components/DebtsPage'
+import { AddDebtSheet } from './components/AddDebtSheet'
+import { DebtDetailSheet } from './components/DebtDetailSheet'
+import { debtStatus, remainingOf } from './lib/debts'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db/db'
 import { currentMonthKey, formatMonthSQ, shiftMonth, todayStr } from './lib/dates'
@@ -41,11 +45,12 @@ export default function App() {
   const [monthKey, setMonthKey] = useState(currentMonthKey())
   const [tab, setTab] = useState<Tab>('home')
   const [moreView, setMoreView] = useState<MoreView | null>(null)
-  const [sheet, setSheet] = useState<'expense' | 'income' | 'transfer' | 'import' | 'reconcile' | null>(null)
+  const [sheet, setSheet] = useState<'expense' | 'income' | 'transfer' | 'import' | 'reconcile' | 'debt' | null>(null)
   const [selected, setSelected] = useState<Expense | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [closing, setClosing] = useState<string | null>(null)
   const [incomePerson, setIncomePerson] = useState<string | undefined>()
+  const [debtId, setDebtId] = useState<string | null>(null)
 
   const budgets = useBudgets()
   const categories = useCategories()
@@ -55,6 +60,7 @@ export default function App() {
   const recurring = useRecurring()
   const limits = useLimits()
   const people = usePeople()
+  const debts = useDebts()
   const prevKey = shiftMonth(monthKey, -1)
   const monthRecords = useLiveQuery(async () => ({ cur: (await db.months.get(monthKey)) ?? null, prev: (await db.months.get(prevKey)) ?? null }), [monthKey, prevKey])
 
@@ -73,7 +79,7 @@ export default function App() {
     if (sheet) setToast(null)
   }, [sheet])
 
-  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits || !monthRecords || !people) return null
+  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits || !monthRecords || !people || !debts) return null
 
   async function onSaved(e: Expense, cover?: Transfer) {
     setSheet(null)
@@ -119,6 +125,12 @@ export default function App() {
   const openIncome = (person?: string) => {
     setIncomePerson(person)
     setSheet('income')
+  }
+
+  const urgentDebts = debts.filter((d) => ['overdue', 'due-soon'].includes(debtStatus(d, today)))
+  const openDebts = () => {
+    setTab('more')
+    setMoreView('debts')
   }
 
   const goTab = (t: Tab) => {
@@ -172,6 +184,15 @@ export default function App() {
                 })}
               </div>
             )}
+            {urgentDebts.length > 0 && (
+              <button onClick={openDebts} className="w-full space-y-1 rounded-2xl bg-amber-500/10 p-4 text-left text-sm" role="alert">
+                {urgentDebts.map((d) => (
+                  <p key={d.id} className={debtStatus(d, today) === 'overdue' ? 'text-red-300' : 'text-amber-300'}>
+                    ⏰ {d.direction === 'owed_to_me' ? `${d.counterparty} të ka borxh` : `I ke borxh ${d.counterparty}`} {formatEUR(remainingOf(d))} · {dueText(d, today)}
+                  </p>
+                ))}
+              </button>
+            )}
             {budgets.map((b) => {
               const s = summaries.find((x) => x.budgetId === b.id)
               const forecast = s && forecastBudget({
@@ -205,6 +226,7 @@ export default function App() {
         {tab === 'stats' && <AnalyticsPage monthKey={monthKey} data={data} prev={prev} budgets={budgets} categories={categories} />}
         {tab === 'more' && !moreView && <MorePage onOpen={setMoreView} onImport={() => setSheet('import')} onReconcile={() => setSheet('reconcile')} />}
         {tab === 'more' && moreView === 'people' && <PeoplePage monthKey={monthKey} budgets={budgets} onAddIncome={openIncome} />}
+        {tab === 'more' && moreView === 'debts' && <DebtsPage debts={debts} onAdd={() => setSheet('debt')} onOpen={setDebtId} />}
         {tab === 'more' && moreView === 'moves' && (
           <MovesPage budgets={budgets} incomes={incomes} splits={data.incomeSplits} transfers={data.transfers} adjustments={data.adjustments} onAddIncome={() => openIncome()} onAddTransfer={() => setSheet('transfer')} />
         )}
@@ -243,6 +265,10 @@ export default function App() {
       {sheet === 'transfer' && <TransferSheet budgets={budgets} summaries={summaries} onClose={() => setSheet(null)} />}
       {sheet === 'import' && <ImportSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onImported={onImported} />}
       {sheet === 'reconcile' && <ReconcileSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} />}
+      {sheet === 'debt' && <AddDebtSheet budgets={budgets} people={people} onClose={() => setSheet(null)} />}
+      {debtId && debts.find((d) => d.id === debtId) && (
+        <DebtDetailSheet debt={debts.find((d) => d.id === debtId)!} budgets={budgets} onClose={() => setDebtId(null)} />
+      )}
       {closing && <CloseMonthSheet monthKey={closing} budgets={budgets} onClose={() => setClosing(null)} />}
       {selected && <ExpenseDetailSheet expense={selected} budgets={budgets} categories={categories} onClose={() => setSelected(null)} />}
       {toast && <UndoToast key={toast.n} message={toast.message} detail={toast.detail} onUndo={onUndo} onExpire={expireToast} />}

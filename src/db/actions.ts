@@ -1,5 +1,7 @@
 import { db, newId, PERSON_COLORS } from './db'
-import type { Expense, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
+import type { Debt, DebtDirection, DebtPayment, Expense, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
+import { budgetEffect, remainingOf } from '../lib/debts'
+import { formatEUR } from '../lib/money'
 import { monthKeyOf, shiftMonth, todayStr } from '../lib/dates'
 import { normalize } from '../lib/categorize'
 import { pendingDates } from '../lib/recurring'
@@ -378,5 +380,112 @@ export async function removePerson(id: string): Promise<'deleted' | 'archived'> 
     }
     await db.people.delete(id)
     return 'deleted' as const
+  })
+}
+
+/* ───────── Borxhet ───────── */
+
+export interface NewDebt {
+  direction: DebtDirection
+  counterparty: string
+  personId?: string
+  amount: number
+  date?: string
+  dueDate?: string
+  note?: string
+  /** Buxheti ku lëvizën paratë; mungon = pa lëvizje (p.sh. borxh i vjetër). */
+  budgetId?: string
+}
+
+function debtNote(direction: DebtDirection, kind: 'create' | 'payment', who: string) {
+  if (kind === 'create') return direction === 'owed_to_me' ? `Borxh: i dhashë hua ${who}` : `Borxh: mora hua nga ${who}`
+  return direction === 'owed_to_me' ? `Borxh: më ktheu ${who}` : `Borxh: i ktheva ${who}`
+}
+
+export async function addDebt(input: NewDebt): Promise<Debt> {
+  const who = input.counterparty.trim()
+  if (!who) throw new Error('Shkruaj emrin e personit')
+  if (!(input.amount > 0)) throw new Error('Shuma duhet të jetë më e madhe se 0')
+  if (input.dueDate && input.date && input.dueDate < input.date) throw new Error('Afati s’mund të jetë para datës së borxhit')
+  const date = input.date ?? todayStr()
+  const debt: Debt = {
+    id: newId(),
+    direction: input.direction,
+    counterparty: who,
+    personId: input.personId || undefined,
+    amount: Math.round(input.amount),
+    date,
+    dueDate: input.dueDate || undefined,
+    note: input.note?.trim() || undefined,
+    budgetId: input.budgetId || undefined,
+    payments: [],
+    settled: false,
+    createdAt: Date.now(),
+  }
+  await db.transaction('rw', db.debts, db.adjustments, async () => {
+    if (debt.budgetId) {
+      debt.adjustmentId = newId()
+      await db.adjustments.add({
+        id: debt.adjustmentId, monthKey: monthKeyOf(date), budgetId: debt.budgetId, date, createdAt: Date.now(),
+        amount: budgetEffect(debt.direction, 'create', debt.amount), note: debtNote(debt.direction, 'create', who), debtId: debt.id,
+      })
+    }
+    await db.debts.add(debt)
+  })
+  return debt
+}
+
+/** Regjistron një pagesë (edhe të pjesshme). Kur mbetja bëhet 0, borxhi shënohet i shlyer. */
+export async function addDebtPayment(debtId: string, p: { amount: number; date?: string; budgetId?: string; note?: string }): Promise<Debt> {
+  return db.transaction('rw', db.debts, db.adjustments, async () => {
+    const debt = await db.debts.get(debtId)
+    if (!debt) throw new Error('Borxhi nuk u gjet')
+    if (debt.settled) throw new Error('Ky borxh është i shlyer')
+    const amount = Math.round(p.amount)
+    if (!(amount > 0)) throw new Error('Shuma duhet të jetë më e madhe se 0')
+    if (amount > remainingOf(debt)) throw new Error(`Pagesa kalon mbetjen e borxhit (${formatEUR(remainingOf(debt))})`)
+    const date = p.date ?? todayStr()
+    const pay: DebtPayment = { id: newId(), amount, date, budgetId: p.budgetId || undefined, note: p.note?.trim() || undefined }
+    if (pay.budgetId) {
+      pay.adjustmentId = newId()
+      await db.adjustments.add({
+        id: pay.adjustmentId, monthKey: monthKeyOf(date), budgetId: pay.budgetId, date, createdAt: Date.now(),
+        amount: budgetEffect(debt.direction, 'payment', amount), note: debtNote(debt.direction, 'payment', debt.counterparty), debtId,
+      })
+    }
+    const payments = [...debt.payments, pay]
+    const done = payments.reduce((a, x) => a + x.amount, 0) >= debt.amount
+    const next: Debt = { ...debt, payments, settled: done, settledAt: done ? Date.now() : undefined }
+    await db.debts.put(next)
+    return next
+  })
+}
+
+/** Fshin një pagesë dhe lëvizjen e saj në buxhet; borxhi rihapet nëse kishte mbetje. */
+export async function deleteDebtPayment(debtId: string, paymentId: string): Promise<void> {
+  await db.transaction('rw', db.debts, db.adjustments, async () => {
+    const debt = await db.debts.get(debtId)
+    const pay = debt?.payments.find((x) => x.id === paymentId)
+    if (!debt || !pay) return
+    if (pay.adjustmentId) await db.adjustments.delete(pay.adjustmentId)
+    const payments = debt.payments.filter((x) => x.id !== paymentId)
+    const done = payments.reduce((a, x) => a + x.amount, 0) >= debt.amount
+    await db.debts.put({ ...debt, payments, settled: done, settledAt: done ? debt.settledAt : undefined })
+  })
+}
+
+/** Mbyll borxhin pa pagesë (p.sh. u fal), ose e rihap. */
+export async function setDebtSettled(debtId: string, settled: boolean): Promise<void> {
+  const debt = await db.debts.get(debtId)
+  if (!debt) return
+  if (!settled && remainingOf(debt) === 0) throw new Error('Borxhi është paguar plotësisht')
+  await db.debts.update(debtId, { settled, settledAt: settled ? Date.now() : undefined })
+}
+
+/** Fshin borxhin bashkë me të gjitha lëvizjet e tij në buxhet. */
+export async function deleteDebt(debtId: string): Promise<void> {
+  await db.transaction('rw', db.debts, db.adjustments, async () => {
+    await db.adjustments.where('debtId').equals(debtId).delete()
+    await db.debts.delete(debtId)
   })
 }

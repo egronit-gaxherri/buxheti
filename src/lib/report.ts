@@ -48,11 +48,11 @@ export function monthReportPdf(d: MonthData, incomes: Income[], budgets: Budget[
   }
 
   if (d.transfers.length || d.adjustments.length) {
-    heading('Transferime dhe korrigjime')
+    heading('Transferime, korrigjime dhe borxhe')
     for (const x of d.transfers)
       w.cols([{ text: formatDateSQ(x.date), width: 11 }, { text: `${bud(x.fromBudgetId)} → ${bud(x.toBudgetId)}`, width: 30 }, { text: formatEUR(x.amount), width: 13, right: true }, { text: x.note ?? '', width: 30 }])
     for (const a of d.adjustments)
-      w.cols([{ text: formatDateSQ(a.date), width: 11 }, { text: `Korrigjim · ${bud(a.budgetId)}`, width: 30 }, { text: formatEUR(a.amount, { sign: true }), width: 13, right: true }])
+      w.cols([{ text: formatDateSQ(a.date), width: 11 }, { text: `${a.debtId ? (a.note ?? 'Borxh').replace(/^Borxh: /, 'Borxh · ') : 'Korrigjim'} · ${bud(a.budgetId)}`, width: 30 }, { text: formatEUR(a.amount, { sign: true }), width: 13, right: true }])
   }
 
   heading('Shpenzimet')

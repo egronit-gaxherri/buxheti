@@ -78,15 +78,41 @@ export interface Adjustment {
   date: string
   createdAt: number
   note?: string
+  /** Lëvizje e krijuar nga një borxh (dhënie/marrje hua ose pagesë) — jo korrigjim. */
+  debtId?: string
 }
 
+export type DebtDirection = 'owed_to_me' | 'i_owe'
+
+export interface DebtPayment {
+  id: string
+  amount: number
+  date: string
+  /** Buxheti ku hynë/dolën paratë; mungon = pa lëvizje në buxhet. */
+  budgetId?: string
+  /** Lëvizja përkatëse te `adjustments`, që të fshihet bashkë me pagesën. */
+  adjustmentId?: string
+  note?: string
+}
+
+/** Detyrim/borxh: kush i ka borxh kujt, sa dhe deri kur. */
 export interface Debt {
   id: string
-  direction: 'owed_to_me' | 'i_owe'
+  /** owed_to_me = i dhashë hua (më ka borxh); i_owe = mora hua (i kam borxh) */
+  direction: DebtDirection
   counterparty: string
+  personId?: string
   amount: number
+  date: string
   dueDate?: string
+  note?: string
+  /** Buxheti nga/ku lëvizën paratë kur u krijua borxhi. */
+  budgetId?: string
+  adjustmentId?: string
+  payments: DebtPayment[]
+  /** I shlyer plotësisht ose i mbyllur me dorë (falur). */
   settled: boolean
+  settledAt?: number
   createdAt: number
 }
 

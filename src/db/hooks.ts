@@ -20,3 +20,4 @@ export const usePeople = () => useLiveQuery(() => db.people.orderBy('name').toAr
 /** Të gjitha të hyrat dhe ndarjet (për totalet e personave: vit / gjithsej). */
 export const useAllIncomes = () =>
   useLiveQuery(async () => ({ incomes: await db.incomes.toArray(), splits: await db.incomeSplits.toArray() }), [])
+export const useDebts = () => useLiveQuery(() => db.debts.toArray(), [])

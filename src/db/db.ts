@@ -60,6 +60,15 @@ export class BudgetDB extends Dexie {
           await tx.table('incomes').update(inc.id, { personId: id })
         }
       })
+    // v3: borxhet me pagesa; lëvizjet e borxheve te adjustments
+    this.version(3)
+      .stores({ debts: 'id, direction, dueDate, personId', adjustments: 'id, monthKey, budgetId, debtId' })
+      .upgrade(async (tx) => {
+        await tx.table('debts').toCollection().modify((d: Partial<Debt>) => {
+          d.payments ??= []
+          d.date ??= new Date(d.createdAt ?? Date.now()).toISOString().slice(0, 10)
+        })
+      })
   }
 }
 

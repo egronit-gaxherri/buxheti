@@ -31,7 +31,7 @@ export function monthCsv(d: MonthData, incomes: Income[], budgets: Budget[], cat
   for (const t of d.transfers)
     rows.push({ date: t.date, order: 2, cells: ['Transferim', text(`${bud(t.fromBudgetId)} → ${bud(t.toBudgetId)}`), '', '', num(t.amount), text(t.note ?? '')] })
   for (const a of d.adjustments)
-    rows.push({ date: a.date, order: 3, cells: ['Korrigjim', text(bud(a.budgetId)), '', '', num(a.amount), text(a.note ?? '')] })
+    rows.push({ date: a.date, order: 3, cells: [a.debtId ? 'Borxh' : 'Korrigjim', text(bud(a.budgetId)), '', '', num(a.amount), text(a.note ?? '')] })
 
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order)
   const header = ['Data', 'Lloji', 'Buxheti', 'Kategoria', 'Përshkrimi', 'Shuma (€)', 'Shënim']

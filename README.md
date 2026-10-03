@@ -42,11 +42,11 @@ hapet në iPhone, por pa offline dhe pa Face ID.
 | `people` | personat që japin para (Edi, mami…) |
 | `incomes`, `incomeSplits` | të hyrat (kush i dha) dhe ndarja e tyre mes buxheteve |
 | `expenses` | shpenzimet (me shënim dhe foto fature opsionale) |
-| `transfers`, `adjustments` | transferimet mes buxheteve, korrigjimet e bilancit |
+| `transfers`, `adjustments` | transferimet mes buxheteve; korrigjimet e bilancit dhe lëvizjet e borxheve |
 | `recurring`, `limits` | shpenzimet e përsëritura, limitet mujore për kategori |
 | `months` | mbyllja e muajit dhe bartja |
 | `descriptions` | historiku për sugjerime dhe mësimin e kategorisë |
-| `debts` | (skema gati, pa UI ende) |
+| `debts` | borxhet (kush i ka borxh kujt, afati) me pagesat e tyre |
 | `settings` | PIN (hash PBKDF2), Face ID, data e backup-it |
 
 ## Siguria — çfarë mbron dhe çfarë jo
@@ -64,4 +64,4 @@ hapet në iPhone, por pa offline dhe pa Face ID.
 - Kur një muaj i mbyllur ndryshohet, bartja nuk përditësohet vetë: hape dhe mbylle sërish
   (aplikacioni e tregon këtë me një shirit në krye).
 - Shpenzimet e përsëritura shtohen kur hapet aplikacioni (PWA-të në iOS nuk kanë punë në sfond).
-- Detyrimet/borxhet dhe sinkronizimi me Supabase nuk janë ndërtuar ende.
+- Sinkronizimi me Supabase nuk është ndërtuar ende.
