@@ -1,8 +1,10 @@
 import type { Budget } from '../db/schema'
 import type { BudgetSummary } from '../lib/calc'
 import { formatEUR } from '../lib/money'
+import { formatDateSQ } from '../lib/dates'
+import type { Forecast } from '../lib/stats'
 
-export function BudgetCard({ budget, s }: { budget: Budget; s: BudgetSummary }) {
+export function BudgetCard({ budget, s, forecast }: { budget: Budget; s: BudgetSummary; forecast?: Forecast }) {
   const pct = s.total > 0 ? Math.max(0, Math.min(100, (s.remaining / s.total) * 100)) : 0
   const color = s.low ? 'var(--color-danger)' : budget.color
   return (
@@ -24,6 +26,8 @@ export function BudgetCard({ budget, s }: { budget: Budget; s: BudgetSummary }) 
         <span>Total {formatEUR(s.total)}</span>
       </div>
 
+      {forecast && <ForecastLine f={forecast} />}
+
       {s.daysLeft > 0 && (
         <div className="mt-4 flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
           <div>
@@ -41,4 +45,16 @@ export function BudgetCard({ budget, s }: { budget: Budget; s: BudgetSummary }) 
       )}
     </section>
   )
+}
+
+function ForecastLine({ f }: { f: Forecast }) {
+  if (f.kind === 'none') return null
+  if (f.kind === 'empty') return <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">⚠ Paratë e këtij buxheti kanë mbaruar.</p>
+  if (f.kind === 'runout')
+    return (
+      <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+        ⚠ {f.reason === 'fixed' ? 'Mbetja nuk mjafton për shpenzimet e përsëritura që vijnë.' : `Me ritmin aktual paratë mbarojnë më ${formatDateSQ(f.date)}.`}
+      </p>
+    )
+  return <p className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">✓ Me këtë ritëm, deri në fund të muajit mbeten rreth {formatEUR(f.projectedLeft)}.</p>
 }

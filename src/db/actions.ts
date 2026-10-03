@@ -208,3 +208,31 @@ export async function runRecurring(today: string = todayStr()): Promise<number> 
     return created
   })
 }
+
+/* ───────── Mbulim me transferim ───────── */
+
+/**
+ * Shton shpenzimin dhe, në të njëjtin transaksion, transferon `coverAmount`
+ * nga një buxhet tjetër për ta mbuluar. Ose ndodhin të dyja, ose asnjëra.
+ */
+export async function addExpenseWithCover(input: NewExpense, cover: { fromBudgetId: string; amount: number }) {
+  return db.transaction('rw', db.expenses, db.descriptions, db.transfers, async () => {
+    const transfer = await addTransfer({
+      fromBudgetId: cover.fromBudgetId,
+      toBudgetId: input.budgetId,
+      amount: cover.amount,
+      date: input.date,
+      note: `Mbulim: ${input.description.trim() || 'shpenzim'}`,
+    })
+    const expense = await addExpense(input)
+    return { expense, transfer }
+  })
+}
+
+/* ───────── Limite ───────── */
+
+/** Vendos limitin mujor për një kategori; `null` ose 0 e heq. */
+export async function setLimit(categoryId: string, amount: number | null) {
+  if (!amount || amount <= 0) await db.limits.delete(categoryId)
+  else await db.limits.put({ id: categoryId, categoryId, amount: Math.round(amount) })
+}

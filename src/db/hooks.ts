@@ -15,3 +15,4 @@ export function useMonth(monthKey: string) {
 export const useIncomes = (monthKey: string) =>
   useLiveQuery(() => db.incomes.where('monthKey').equals(monthKey).reverse().sortBy('date'), [monthKey])
 export const useRecurring = () => useLiveQuery(() => db.recurring.toArray(), [])
+export const useLimits = () => useLiveQuery(() => db.limits.toArray(), [])

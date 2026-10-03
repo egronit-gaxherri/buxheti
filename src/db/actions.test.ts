@@ -47,3 +47,23 @@ describe('transferime dhe të përsëritura', () => {
     expect(await runRecurring('2026-10-11')).toBe(0)
   })
 })
+
+import { addExpenseWithCover, setLimit } from './actions'
+
+describe('mbulim dhe limite', () => {
+  it('mbulimi shton transferim + shpenzim së bashku', async () => {
+    const [h, p] = await db.budgets.orderBy('order').toArray()
+    await addIncome({ source: 'x', amount: 10000, date: '2026-10-01', splits: [{ budgetId: h.id, amount: 1000 }, { budgetId: p.id, amount: 9000 }] })
+    // Shtëpi ka 10€, shpenzimi 25€ → mbulohet 15€ nga Personal
+    await addExpenseWithCover({ amount: 2500, description: 'Fature', budgetId: h.id, categoryId: 'x', date: '2026-10-02' }, { fromBudgetId: p.id, amount: 1500 })
+    expect(await remainingFor(h.id, '2026-10')).toBe(0)
+    expect(await remainingFor(p.id, '2026-10')).toBe(7500)
+    expect((await db.transfers.toArray())[0].note).toBe('Mbulim: Fature')
+  })
+  it('setLimit vendos dhe heq', async () => {
+    await setLimit('c1', 12000)
+    expect((await db.limits.get('c1'))?.amount).toBe(12000)
+    await setLimit('c1', null)
+    expect(await db.limits.get('c1')).toBeUndefined()
+  })
+})

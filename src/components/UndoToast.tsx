@@ -4,12 +4,13 @@ export const UNDO_MS = 10_000
 
 interface Props {
   message: string
+  detail?: { text: string; level: 'warn' | 'over' }
   onUndo: () => void
   onExpire: () => void
 }
 
 /** Njoftim i madh me "Zhbëj" për 10 sekonda. Remount me `key` rinis kohën. */
-export function UndoToast({ message, onUndo, onExpire }: Props) {
+export function UndoToast({ message, detail, onUndo, onExpire }: Props) {
   useEffect(() => {
     const t = setTimeout(onExpire, UNDO_MS)
     return () => clearTimeout(t)
@@ -19,7 +20,10 @@ export function UndoToast({ message, onUndo, onExpire }: Props) {
     <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 5.5rem)', animation: 'pop .2s ease-out' }}>
       <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white text-slate-900 shadow-2xl" role="status">
         <div className="flex items-center gap-3 p-4">
-          <p className="flex-1 text-lg font-semibold leading-snug">{message}</p>
+          <div className="flex-1">
+            <p className="text-lg font-semibold leading-snug">{message}</p>
+            {detail && <p className={`mt-1 text-sm font-medium ${detail.level === 'over' ? 'text-red-600' : 'text-amber-600'}`}>{detail.level === 'over' ? '🚨' : '⚠'} {detail.text}</p>}
+          </div>
           <button onClick={onUndo} className="rounded-2xl bg-slate-900 px-5 py-3 text-base font-semibold text-white active:opacity-80">
             Zhbëj
           </button>
