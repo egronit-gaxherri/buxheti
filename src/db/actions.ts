@@ -1,7 +1,8 @@
 import { db, newId } from './db'
-import type { Expense, Income, IncomeSplit } from './schema'
+import type { Expense, Income, IncomeSplit, Recurring, Transfer } from './schema'
 import { monthKeyOf, todayStr } from '../lib/dates'
 import { normalize } from '../lib/categorize'
+import { pendingDates } from '../lib/recurring'
 import { summarizeBudget } from '../lib/calc'
 import { loadMonthData } from './queries'
 
@@ -112,4 +113,98 @@ export async function suggestDescriptions(query: string, limit = 6) {
   if (!q) return db.descriptions.orderBy('count').reverse().limit(limit).toArray()
   const hits = await db.descriptions.where('text').startsWith(q).toArray()
   return hits.sort((a, b) => b.count - a.count).slice(0, limit)
+}
+
+/* ───────── Transferime ───────── */
+
+export interface NewTransfer {
+  fromBudgetId: string
+  toBudgetId: string
+  amount: number
+  date?: string
+  note?: string
+}
+
+export async function addTransfer(input: NewTransfer): Promise<Transfer> {
+  if (input.fromBudgetId === input.toBudgetId) throw new Error('Zgjidh dy buxhete të ndryshme')
+  if (!(input.amount > 0)) throw new Error('Shuma duhet të jetë më e madhe se 0')
+  const date = input.date ?? todayStr()
+  const t: Transfer = {
+    id: newId(),
+    monthKey: monthKeyOf(date),
+    fromBudgetId: input.fromBudgetId,
+    toBudgetId: input.toBudgetId,
+    amount: Math.round(input.amount),
+    date,
+    createdAt: Date.now(),
+    note: input.note?.trim() || undefined,
+  }
+  await db.transfers.add(t)
+  return t
+}
+
+export const deleteTransfer = (id: string) => db.transfers.delete(id)
+
+/* ───────── Shpenzime të përsëritura ───────── */
+
+export interface NewRecurring {
+  budgetId: string
+  categoryId: string
+  amount: number
+  description: string
+  dayOfMonth: number
+}
+
+export async function addRecurring(input: NewRecurring): Promise<Recurring> {
+  if (!(input.amount > 0)) throw new Error('Shuma duhet të jetë më e madhe se 0')
+  const r: Recurring = {
+    id: newId(),
+    ...input,
+    dayOfMonth: Math.min(31, Math.max(1, Math.round(input.dayOfMonth))),
+    description: input.description.trim(),
+    active: true,
+  }
+  await db.recurring.add(r)
+  await runRecurring()
+  return r
+}
+
+export const setRecurringActive = (id: string, active: boolean) => db.recurring.update(id, { active })
+export const deleteRecurring = (id: string) => db.recurring.delete(id)
+
+/**
+ * Shton shpenzimet e përsëritura që kanë ardhur data. Idempotent: kontrollon
+ * për dublikate brenda transaksionit, kështu dy thirrje paralele nuk e shtojnë dy herë.
+ * Kthen sa shpenzime u shtuan.
+ */
+export async function runRecurring(today: string = todayStr()): Promise<number> {
+  return db.transaction('rw', db.recurring, db.expenses, async () => {
+    let created = 0
+    for (const r of await db.recurring.filter((x) => x.active).toArray()) {
+      const dates = pendingDates(r, today)
+      for (const date of dates) {
+        const monthKey = monthKeyOf(date)
+        const exists = await db.expenses
+          .where('recurringId')
+          .equals(r.id)
+          .and((e) => e.monthKey === monthKey)
+          .count()
+        if (exists) continue
+        await db.expenses.add({
+          id: newId(),
+          monthKey,
+          budgetId: r.budgetId,
+          categoryId: r.categoryId,
+          amount: r.amount,
+          description: r.description,
+          date,
+          createdAt: Date.now(),
+          recurringId: r.id,
+        })
+        created++
+      }
+      if (dates.length) await db.recurring.update(r.id, { lastRunMonth: monthKeyOf(dates[dates.length - 1]) })
+    }
+    return created
+  })
 }

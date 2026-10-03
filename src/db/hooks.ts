@@ -11,3 +11,7 @@ export function useMonth(monthKey: string) {
   const summaries = data ? summarizeMonth(data) : undefined
   return { data, summaries }
 }
+
+export const useIncomes = (monthKey: string) =>
+  useLiveQuery(() => db.incomes.where('monthKey').equals(monthKey).reverse().sortBy('date'), [monthKey])
+export const useRecurring = () => useLiveQuery(() => db.recurring.toArray(), [])
