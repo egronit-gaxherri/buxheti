@@ -10,7 +10,7 @@ export const BACKUP_VERSION = 2 // v2: personat
  */
 export const BACKUP_TABLES = [
   'budgets', 'categories', 'incomes', 'incomeSplits', 'expenses', 'transfers',
-  'adjustments', 'debts', 'recurring', 'limits', 'months', 'descriptions', 'people',
+  'adjustments', 'debts', 'recurring', 'limits', 'months', 'descriptions', 'people', 'goals',
 ] as const
 type TableName = (typeof BACKUP_TABLES)[number]
 

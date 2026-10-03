@@ -21,3 +21,4 @@ export const usePeople = () => useLiveQuery(() => db.people.orderBy('name').toAr
 export const useAllIncomes = () =>
   useLiveQuery(async () => ({ incomes: await db.incomes.toArray(), splits: await db.incomeSplits.toArray() }), [])
 export const useDebts = () => useLiveQuery(() => db.debts.toArray(), [])
+export const useGoals = () => useLiveQuery(() => db.goals.toArray(), [])

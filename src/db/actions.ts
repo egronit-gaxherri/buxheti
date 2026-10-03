@@ -1,5 +1,6 @@
 import { db, newId, PERSON_COLORS } from './db'
-import type { Debt, DebtDirection, DebtPayment, Expense, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
+import type { Debt, DebtDirection, DebtPayment, Expense, Goal, GoalAuto, GoalContribution, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
+import { leftOf as leftOfGoal, savedOf } from '../lib/goals'
 import { budgetEffect, remainingOf } from '../lib/debts'
 import { formatEUR } from '../lib/money'
 import { monthKeyOf, parseDate, shiftMonth, todayStr } from '../lib/dates'
@@ -489,4 +490,109 @@ export async function deleteDebt(debtId: string): Promise<void> {
     await db.adjustments.where('debtId').equals(debtId).delete()
     await db.debts.delete(debtId)
   })
+}
+
+/* ───────── Qëllimet e kursimit ───────── */
+
+export interface NewGoal {
+  name: string
+  icon: string
+  target: number
+  deadline?: string
+  auto?: Omit<GoalAuto, 'lastRunMonth'>
+}
+
+export async function addGoal(input: NewGoal): Promise<Goal> {
+  const name = input.name.trim()
+  if (!name) throw new Error('Shkruaj emrin e qëllimit')
+  if (!(input.target > 0)) throw new Error('Shuma e synuar duhet të jetë më e madhe se 0')
+  if (input.deadline && input.deadline < todayStr()) throw new Error('Afati s’mund të jetë në të kaluarën')
+  if (input.auto && !(input.auto.amount > 0)) throw new Error('Shuma e kursimit automatik duhet të jetë më e madhe se 0')
+  const g: Goal = {
+    id: newId(), name, icon: input.icon || '🎯', color: PERSON_COLORS[(await db.goals.count()) % PERSON_COLORS.length],
+    target: Math.round(input.target), deadline: input.deadline || undefined, contributions: [], archived: false, createdAt: Date.now(),
+    // kursimi automatik nis nga muaji aktual (nëse dita ka ardhur) — jo prapa në kohë
+    auto: input.auto ? { ...input.auto, dayOfMonth: Math.min(31, Math.max(1, Math.round(input.auto.dayOfMonth))), lastRunMonth: shiftMonth(monthKeyOf(todayStr()), -1) } : undefined,
+  }
+  await db.goals.add(g)
+  await runGoalAutoSave()
+  return g
+}
+
+export async function updateGoal(id: string, patch: Partial<Pick<Goal, 'name' | 'icon' | 'target' | 'deadline' | 'archived'>> & { auto?: Omit<GoalAuto, 'lastRunMonth'> | null }) {
+  const g = await db.goals.get(id)
+  if (!g) return
+  const { auto, ...rest } = patch
+  const next: Goal = { ...g, ...rest }
+  if (auto === null) next.auto = undefined
+  else if (auto) next.auto = { ...auto, lastRunMonth: g.auto?.lastRunMonth ?? shiftMonth(monthKeyOf(todayStr()), -1) }
+  if (!(next.target > 0)) throw new Error('Shuma e synuar duhet të jetë më e madhe se 0')
+  await db.goals.put(next)
+}
+
+/** Vë para mënjanë (amount > 0) ose i tërheq (amount < 0). Paratë lëvizin nga/në buxhetin, pa u llogaritur si shpenzim. */
+export async function goalMove(goalId: string, p: { amount: number; budgetId?: string; date?: string; note?: string; id?: string; auto?: boolean }): Promise<Goal> {
+  return db.transaction('rw', db.goals, db.adjustments, async () => {
+    const g = await db.goals.get(goalId)
+    if (!g) throw new Error('Qëllimi nuk u gjet')
+    if (p.id && g.contributions.some((c) => c.id === p.id)) return g // kursimi automatik i këtij muaji është bërë tashmë
+    const amount = Math.round(p.amount)
+    if (amount === 0) throw new Error('Shuma duhet të jetë më e madhe se 0')
+    if (amount < 0 && -amount > savedOf(g)) throw new Error(`Në këtë qëllim ke vetëm ${formatEUR(savedOf(g))}`)
+    const date = p.date ?? todayStr()
+    const c: GoalContribution = { id: p.id ?? newId(), amount, date, budgetId: p.budgetId || undefined, note: p.note?.trim() || undefined, auto: p.auto || undefined }
+    if (c.budgetId) {
+      c.adjustmentId = newId()
+      await db.adjustments.add({
+        id: c.adjustmentId, monthKey: monthKeyOf(date), budgetId: c.budgetId, date, createdAt: Date.now(),
+        amount: -amount, note: amount > 0 ? `Kursim: ${g.name}` : `Tërhequr nga: ${g.name}`, goalId,
+      })
+    }
+    const next = { ...g, contributions: [...g.contributions, c] }
+    await db.goals.put(next)
+    return next
+  })
+}
+
+export async function deleteGoalContribution(goalId: string, contributionId: string): Promise<void> {
+  await db.transaction('rw', db.goals, db.adjustments, async () => {
+    const g = await db.goals.get(goalId)
+    const c = g?.contributions.find((x) => x.id === contributionId)
+    if (!g || !c) return
+    if (c.adjustmentId) await db.adjustments.delete(c.adjustmentId)
+    await db.goals.put({ ...g, contributions: g.contributions.filter((x) => x.id !== contributionId) })
+  })
+}
+
+/** Fshin qëllimin; paratë e kursyera kthehen te buxhetet nga erdhën. */
+export async function deleteGoal(goalId: string): Promise<void> {
+  await db.transaction('rw', db.goals, db.adjustments, async () => {
+    await db.adjustments.where('goalId').equals(goalId).delete()
+    await db.goals.delete(goalId)
+  })
+}
+
+/**
+ * Kursimi automatik: për çdo qëllim me `auto`, vë mënjanë shumën në ditën e caktuar të çdo muaji
+ * (pa e kaluar shumën e synuar). Idempotent: id-ja e kontributit është `auto:<qëllimi>:<muaji>`.
+ */
+export async function runGoalAutoSave(today: string = todayStr()): Promise<number> {
+  let made = 0
+  for (const g of await db.goals.toArray()) {
+    if (g.archived || !g.auto) continue
+    const dates = pendingDates({ id: g.id, budgetId: g.auto.budgetId, categoryId: '', amount: g.auto.amount, description: '', dayOfMonth: g.auto.dayOfMonth, active: true, lastRunMonth: g.auto.lastRunMonth }, today)
+    for (const date of dates) {
+      const cur = (await db.goals.get(g.id))!
+      const id = `auto:${g.id}:${monthKeyOf(date)}`
+      const amount = Math.min(g.auto.amount, leftOfGoal(cur))
+      if (amount <= 0 || cur.contributions.some((c) => c.id === id)) continue
+      await goalMove(g.id, { amount, budgetId: g.auto.budgetId, date, id, auto: true })
+      made++
+    }
+    if (dates.length) {
+      const cur = (await db.goals.get(g.id))!
+      await db.goals.put({ ...cur, auto: { ...cur.auto!, lastRunMonth: monthKeyOf(dates[dates.length - 1]) } })
+    }
+  }
+  return made
 }

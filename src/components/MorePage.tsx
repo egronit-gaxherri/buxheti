@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 
-export type MoreView = 'family' | 'people' | 'debts' | 'moves' | 'recurring' | 'limits' | 'archive' | 'security'
+export type MoreView = 'goals' | 'family' | 'people' | 'debts' | 'moves' | 'recurring' | 'limits' | 'archive' | 'security'
 
 const ITEMS: { id: MoreView; icon: string; title: string; hint: string }[] = [
+  { id: 'goals', icon: '🎯', title: 'Qëllimet e kursimit', hint: 'Pushime, makinë, fond emergjence — me progres' },
   { id: 'family', icon: '🏡', title: 'Familja & sinkronizimi', hint: 'Ndaj Shtëpinë me familjarët në telefonat e tyre' },
   { id: 'people', icon: '👥', title: 'Personat', hint: 'Kush jep para për shtëpi dhe sa gjithsej' },
   { id: 'debts', icon: '🤝', title: 'Borxhet', hint: 'Kush i ka borxh kujt, pagesat dhe afatet' },
@@ -14,6 +15,7 @@ const ITEMS: { id: MoreView; icon: string; title: string; hint: string }[] = [
 ]
 
 export const MORE_TITLES: Record<MoreView, string> = {
+  goals: 'Qëllimet',
   family: 'Familja',
   people: 'Personat',
   debts: 'Borxhet',

@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   Adjustment, Budget, Category, DescriptionStat, Debt, Expense, Income,
-  IncomeSplit, Limit, MonthRecord, Person, Recurring, Setting, SyncStateRow, Transfer,
+  Goal, IncomeSplit, Limit, MonthRecord, Person, Recurring, Setting, SyncStateRow, Transfer,
 } from './schema'
 import { normalize } from '../lib/categorize'
 
@@ -25,6 +25,7 @@ export class BudgetDB extends Dexie {
   settings!: EntityTable<Setting, 'key'>
   people!: EntityTable<Person, 'id'>
   syncState!: EntityTable<SyncStateRow, 'key'>
+  goals!: EntityTable<Goal, 'id'>
 
   constructor(name = 'budgeti') {
     super(name)
@@ -72,6 +73,8 @@ export class BudgetDB extends Dexie {
       })
     // v4: gjendja e sinkronizimit me familjen
     this.version(4).stores({ syncState: 'key' })
+    // v5: qëllimet e kursimit; lëvizjet e tyre te adjustments
+    this.version(5).stores({ goals: 'id', adjustments: 'id, monthKey, budgetId, debtId, goalId' })
   }
 }
 

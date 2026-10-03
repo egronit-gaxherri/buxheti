@@ -58,7 +58,7 @@ Si funksionon:
 - **Bilanci nuk ruhet kurrë** — llogaritet nga ngjarjet:
   `bartja + ndarjet e të hyrave + transferime brenda − jashtë − shpenzime + korrigjime`.
 - `src/lib/` — logjikë e pastër, pa React, e testuar (parseri i shënimeve, ndarja, parashikimi,
-  limitet, CSV, PDF, PIN, backup).
+  limitet, qëllimet, vëzhgimet automatike, CSV, PDF, PIN, backup).
 - `src/db/` — skema Dexie, veprimet (çdo shkrim me shumë tabela është në transaksion), query-t.
 - `src/components/` — UI.
 
@@ -73,6 +73,7 @@ Si funksionon:
 | `months` | mbyllja e muajit dhe bartja |
 | `descriptions` | historiku për sugjerime dhe mësimin e kategorisë |
 | `debts` | borxhet (kush i ka borxh kujt, afati) me pagesat e tyre |
+| `goals` | qëllimet e kursimit, kontributet dhe kursimi automatik mujor |
 | `settings` | PIN (hash PBKDF2), Face ID, data e backup-it, identiteti në familje |
 | `syncState` | hash-i i çdo rekordi të përbashkët në sinkronizimin e fundit |
 

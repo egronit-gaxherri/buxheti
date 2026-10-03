@@ -82,18 +82,18 @@ export function MovesPage({ budgets, incomes, splits, transfers, adjustments, on
     
       {adjustments.length > 0 && (
         <section>
-          <h2 className="mb-2 px-1 text-lg font-semibold">Korrigjime & borxhe</h2>
+          <h2 className="mb-2 px-1 text-lg font-semibold">Korrigjime, borxhe & kursime</h2>
           <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface">
             {[...adjustments].sort((a, b) => b.createdAt - a.createdAt).map((a) => (
               <li key={a.id} className="flex items-center gap-3 px-4 py-3">
-                <span className="grid size-10 place-items-center rounded-full bg-surface-2">{a.debtId ? '🤝' : '⚖️'}</span>
+                <span className="grid size-10 place-items-center rounded-full bg-surface-2">{a.debtId ? '🤝' : a.goalId ? '🎯' : '⚖️'}</span>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{bud(a.budgetId)?.name}</div>
                   <div className="text-xs text-muted">{formatDateSQ(a.date)} · {a.note ?? 'Korrigjim'}</div>
                 </div>
                 <span className={`tabnum font-semibold ${a.amount < 0 ? 'text-red-300' : 'text-emerald-300'}`}>{formatEUR(a.amount, { sign: true })}</span>
-                {a.debtId ? (
-                  <span className="w-5" title="Ndryshoje te Borxhet" />
+                {a.debtId || a.goalId ? (
+                  <span className="w-5" title={a.debtId ? 'Ndryshoje te Borxhet' : 'Ndryshoje te Qëllimet'} />
                 ) : (
                   <button onClick={() => confirm('Të fshihet korrigjimi?') && deleteAdjustment(a.id)} aria-label="Fshi korrigjimin" className="px-1 text-muted">✕</button>
                 )}

@@ -5,6 +5,7 @@ import { DailyBars, DonutChart } from './Charts'
 import { categoryColor, compareMonths, dailySpending, spendingByCategory } from '../lib/stats'
 import { currentMonthKey, formatMonthSQ, shiftMonth, todayStr } from '../lib/dates'
 import { formatEUR } from '../lib/money'
+import { InsightsSection } from './InsightsSection'
 
 interface Props {
   monthKey: string
@@ -38,6 +39,7 @@ export function AnalyticsPage({ monthKey, data, prev, budgets, categories }: Pro
 
   return (
     <div className="space-y-4">
+      {isCurrent && <InsightsSection categories={categories} />}
       <div className="flex gap-2 overflow-x-auto">
         <button className={chip(!budgetId)} onClick={() => setBudgetId(null)}>Të gjitha</button>
         {budgets.map((b) => (

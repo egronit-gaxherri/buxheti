@@ -88,6 +88,42 @@ export interface Adjustment {
   note?: string
   /** Lëvizje e krijuar nga një borxh (dhënie/marrje hua ose pagesë) — jo korrigjim. */
   debtId?: string
+  /** Para të vëna mënjanë për një qëllim kursimi (ose të tërhequra prej tij). */
+  goalId?: string
+}
+
+export interface GoalContribution {
+  id: string
+  /** pozitive = kursim (para të vëna mënjanë), negative = tërheqje */
+  amount: number
+  date: string
+  /** Buxheti nga/ku lëvizën paratë; mungon = para nga jashtë buxheteve. */
+  budgetId?: string
+  adjustmentId?: string
+  note?: string
+  auto?: boolean
+}
+
+export interface GoalAuto {
+  amount: number
+  budgetId: string
+  dayOfMonth: number
+  lastRunMonth?: string
+}
+
+/** Qëllim kursimi: "Pushime 600 € deri në korrik". */
+export interface Goal {
+  id: string
+  name: string
+  icon: string
+  color: string
+  target: number
+  deadline?: string
+  contributions: GoalContribution[]
+  /** Kursim automatik çdo muaj. */
+  auto?: GoalAuto
+  archived: boolean
+  createdAt: number
 }
 
 export type DebtDirection = 'owed_to_me' | 'i_owe'
