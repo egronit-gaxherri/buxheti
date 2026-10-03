@@ -1,5 +1,5 @@
-import type { Budget, Income, IncomeSplit, Transfer } from '../db/schema'
-import { deleteIncome, deleteTransfer } from '../db/actions'
+import type { Adjustment, Budget, Income, IncomeSplit, Transfer } from '../db/schema'
+import { deleteAdjustment, deleteIncome, deleteTransfer } from '../db/actions'
 import { formatEUR } from '../lib/money'
 import { formatDateSQ } from '../lib/dates'
 
@@ -8,12 +8,13 @@ interface Props {
   incomes: Income[]
   splits: IncomeSplit[]
   transfers: Transfer[]
+  adjustments: Adjustment[]
   onAddIncome: () => void
   onAddTransfer: () => void
 }
 
 /** Të hyrat dhe transferimet e muajit. */
-export function MovesPage({ budgets, incomes, splits, transfers, onAddIncome, onAddTransfer }: Props) {
+export function MovesPage({ budgets, incomes, splits, transfers, adjustments, onAddIncome, onAddTransfer }: Props) {
   const bud = (id: string) => budgets.find((b) => b.id === id)
   const total = incomes.reduce((a, i) => a + i.amount, 0)
 
@@ -74,6 +75,25 @@ export function MovesPage({ budgets, incomes, splits, transfers, onAddIncome, on
           ))}
         </ul>
       </section>
+    
+      {adjustments.length > 0 && (
+        <section>
+          <h2 className="mb-2 px-1 text-lg font-semibold">Korrigjime</h2>
+          <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface">
+            {[...adjustments].sort((a, b) => b.createdAt - a.createdAt).map((a) => (
+              <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="grid size-10 place-items-center rounded-full bg-surface-2">⚖️</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{bud(a.budgetId)?.name}</div>
+                  <div className="text-xs text-muted">{formatDateSQ(a.date)} · {a.note ?? 'Korrigjim'}</div>
+                </div>
+                <span className={`tabnum font-semibold ${a.amount < 0 ? 'text-red-300' : 'text-emerald-300'}`}>{formatEUR(a.amount, { sign: true })}</span>
+                <button onClick={() => confirm('Të fshihet korrigjimi?') && deleteAdjustment(a.id)} aria-label="Fshi korrigjimin" className="px-1 text-muted">✕</button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   )
 }

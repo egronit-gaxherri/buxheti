@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useBudgets, useCategories, useIncomes, useLimits, useMonth, useRecurring } from './db/hooks'
-import { deleteTransfer, remainingFor, runRecurring, undoExpense } from './db/actions'
+import { deleteTransfer, remainingFor, runRecurring, undoExpenses } from './db/actions'
 import { loadMonthData } from './db/queries'
 import type { Expense, Transfer } from './db/schema'
 import { BudgetCard } from './components/BudgetCard'
@@ -13,6 +13,8 @@ import { MovesPage } from './components/MovesPage'
 import { RecurringPage } from './components/RecurringPage'
 import { TransferSheet } from './components/TransferSheet'
 import { AnalyticsPage } from './components/AnalyticsPage'
+import { ImportSheet } from './components/ImportSheet'
+import { ReconcileSheet } from './components/ReconcileSheet'
 import { LimitsPage } from './components/LimitsPage'
 import { MORE_TITLES, MorePage, type MoreView } from './components/MorePage'
 import { currentMonthKey, formatMonthSQ, shiftMonth, todayStr } from './lib/dates'
@@ -21,7 +23,7 @@ import { forecastBudget, limitCrossing, limitLevel, upcomingRecurring } from './
 
 type Tab = 'home' | 'expenses' | 'stats' | 'more'
 interface ToastState {
-  expense: Expense
+  expenses: Expense[]
   cover?: Transfer
   message: string
   detail?: { text: string; level: 'warn' | 'over' }
@@ -32,7 +34,7 @@ export default function App() {
   const [monthKey, setMonthKey] = useState(currentMonthKey())
   const [tab, setTab] = useState<Tab>('home')
   const [moreView, setMoreView] = useState<MoreView | null>(null)
-  const [sheet, setSheet] = useState<'expense' | 'income' | 'transfer' | null>(null)
+  const [sheet, setSheet] = useState<'expense' | 'income' | 'transfer' | 'import' | 'reconcile' | null>(null)
   const [selected, setSelected] = useState<Expense | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
 
@@ -80,12 +82,18 @@ export default function App() {
           text: `${cat}: ${crossing === 'over' ? 'ke kaluar limitin' : 'ke arritur 80% të limitit'} (${formatEUR(spent)} / ${formatEUR(limit.amount)})`,
         }
     }
-    setToast({ expense: e, cover, message, detail, n: Date.now() })
+    setToast({ expenses: [e], cover, message, detail, n: Date.now() })
+  }
+
+  function onImported(made: Expense[]) {
+    setSheet(null)
+    const total = made.reduce((a, e) => a + e.amount, 0)
+    setToast({ expenses: made, message: `U importuan ${made.length} shpenzime (${formatEUR(total)})`, n: Date.now() })
   }
 
   async function onUndo() {
     if (!toast) return
-    await undoExpense(toast.expense)
+    await undoExpenses(toast.expenses)
     if (toast.cover) await deleteTransfer(toast.cover.id)
     setToast(null)
   }
@@ -156,9 +164,9 @@ export default function App() {
         )}
         {tab === 'expenses' && <ExpenseList expenses={data.expenses} budgets={budgets} categories={categories} onSelect={setSelected} />}
         {tab === 'stats' && <AnalyticsPage monthKey={monthKey} data={data} prev={prev} budgets={budgets} categories={categories} />}
-        {tab === 'more' && !moreView && <MorePage onOpen={setMoreView} />}
+        {tab === 'more' && !moreView && <MorePage onOpen={setMoreView} onImport={() => setSheet('import')} onReconcile={() => setSheet('reconcile')} />}
         {tab === 'more' && moreView === 'moves' && (
-          <MovesPage budgets={budgets} incomes={incomes} splits={data.incomeSplits} transfers={data.transfers} onAddIncome={() => setSheet('income')} onAddTransfer={() => setSheet('transfer')} />
+          <MovesPage budgets={budgets} incomes={incomes} splits={data.incomeSplits} transfers={data.transfers} adjustments={data.adjustments} onAddIncome={() => setSheet('income')} onAddTransfer={() => setSheet('transfer')} />
         )}
         {tab === 'more' && moreView === 'recurring' && <RecurringPage budgets={budgets} categories={categories} items={recurring} />}
         {tab === 'more' && moreView === 'limits' && <LimitsPage categories={categories} limits={limits} expenses={data.expenses} />}
@@ -183,6 +191,8 @@ export default function App() {
       {sheet === 'expense' && <AddExpenseSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onSaved={onSaved} />}
       {sheet === 'income' && <AddIncomeSheet budgets={budgets} onClose={() => setSheet(null)} />}
       {sheet === 'transfer' && <TransferSheet budgets={budgets} summaries={summaries} onClose={() => setSheet(null)} />}
+      {sheet === 'import' && <ImportSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onImported={onImported} />}
+      {sheet === 'reconcile' && <ReconcileSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} />}
       {selected && <ExpenseDetailSheet expense={selected} budgets={budgets} categories={categories} onClose={() => setSelected(null)} />}
       {toast && <UndoToast key={toast.n} message={toast.message} detail={toast.detail} onUndo={onUndo} onExpire={expireToast} />}
     </div>

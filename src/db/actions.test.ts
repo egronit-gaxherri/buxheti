@@ -67,3 +67,45 @@ describe('mbulim dhe limite', () => {
     expect(await db.limits.get('c1')).toBeUndefined()
   })
 })
+
+import { importExpenses, reconcileBalances, undoExpenses } from './actions'
+
+describe('import dhe përshtatje bilanci', () => {
+  it('importi është atomik dhe zhbëhet', async () => {
+    const [h] = await db.budgets.orderBy('order').toArray()
+    const made = await importExpenses([
+      { amount: 2000, description: 'Etc junik -mami', budgetId: h.id, categoryId: 'x', date: '2026-10-02' },
+      { amount: 300, description: 'Buk', budgetId: h.id, categoryId: 'x', date: '2026-10-02' },
+    ])
+    expect(await db.expenses.count()).toBe(2)
+    await undoExpenses(made)
+    expect(await db.expenses.count()).toBe(0)
+    expect(await db.descriptions.count()).toBe(0)
+  })
+  it('korrigjimi e bën mbetjen të barabartë me realitetin (lart dhe poshtë)', async () => {
+    const [h, p] = await db.budgets.orderBy('order').toArray()
+    await addIncome({ source: 'x', amount: 30000, date: '2026-10-01', splits: [{ budgetId: h.id, amount: 20000 }, { budgetId: p.id, amount: 10000 }] })
+    await addExpense({ amount: 5000, description: 'a', budgetId: h.id, categoryId: 'x', date: '2026-10-02' })
+    // app: Shtëpi 150€, Personal 100€. Realisht: Shtëpi 142,30€ (mungojnë 7,70), Personal 105€ (+5)
+    const n = await reconcileBalances(
+      [{ budgetId: h.id, actual: 14230, mode: 'adjustment' }, { budgetId: p.id, actual: 10500, mode: 'adjustment' }],
+      'x', '2026-10-05',
+    )
+    expect(n).toBe(2)
+    expect(await remainingFor(h.id, '2026-10')).toBe(14230)
+    expect(await remainingFor(p.id, '2026-10')).toBe(10500)
+    expect((await db.adjustments.toArray()).map((a) => a.amount).sort((a, b) => a - b)).toEqual([-770, 500])
+  })
+  it('"i pashënuar" shton shpenzim; diferenca 0 nuk bën asgjë', async () => {
+    const [h] = await db.budgets.orderBy('order').toArray()
+    await addIncome({ source: 'x', amount: 10000, date: '2026-10-01', splits: [{ budgetId: h.id, amount: 10000 }] })
+    expect(await reconcileBalances([{ budgetId: h.id, actual: 10000, mode: 'untracked' }], 'x', '2026-10-05')).toBe(0)
+    expect(await reconcileBalances([{ budgetId: h.id, actual: 9000, mode: 'untracked' }], 'x', '2026-10-05')).toBe(1)
+    expect(await remainingFor(h.id, '2026-10')).toBe(9000)
+    expect((await db.expenses.toArray())[0]).toMatchObject({ amount: 1000, description: 'Të pashënuara' })
+    expect(await db.adjustments.count()).toBe(0)
+    // mode 'untracked' me diferencë pozitive bëhet korrigjim
+    await reconcileBalances([{ budgetId: h.id, actual: 9500, mode: 'untracked' }], 'x', '2026-10-05')
+    expect(await db.adjustments.count()).toBe(1)
+  })
+})

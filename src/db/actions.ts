@@ -236,3 +236,64 @@ export async function setLimit(categoryId: string, amount: number | null) {
   if (!amount || amount <= 0) await db.limits.delete(categoryId)
   else await db.limits.put({ id: categoryId, categoryId, amount: Math.round(amount) })
 }
+
+/* ───────── Import nga shënimet ───────── */
+
+/** Ruan të gjitha shpenzimet e importuara në një transaksion (ose të gjitha, ose asnjë). */
+export async function importExpenses(items: NewExpense[]): Promise<Expense[]> {
+  return db.transaction('rw', db.expenses, db.descriptions, async () => {
+    const out: Expense[] = []
+    for (const it of items) out.push(await addExpense(it))
+    return out
+  })
+}
+
+/** Zhbën një import të plotë. */
+export async function undoExpenses(expenses: Expense[]): Promise<void> {
+  await db.transaction('rw', db.expenses, db.descriptions, async () => {
+    for (const e of expenses) await undoExpense(e)
+  })
+}
+
+/* ───────── Përshtatja e bilancit ───────── */
+
+export type ReconcileMode = 'adjustment' | 'untracked'
+
+export interface ReconcileInput {
+  budgetId: string
+  /** Sa ke realisht në dorë/llogari për këtë buxhet (cent). */
+  actual: number
+  /** 'untracked' = shpenzim i pashënuar (vetëm kur mungojnë para); 'adjustment' = korrigjim. */
+  mode: ReconcileMode
+}
+
+export const UNTRACKED_DESCRIPTION = 'Të pashënuara'
+
+/**
+ * Llogarit diferencën mes mbetjes në aplikacion dhe asaj reale dhe e regjistron,
+ * kështu që mbetja përputhet saktësisht me `actual`. Punon gjithmonë mbi muajin aktual.
+ * Kthen sa regjistrime u krijuan (buxhetet pa diferencë anashkalohen).
+ */
+export async function reconcileBalances(inputs: ReconcileInput[], fallbackCategoryId: string, today = todayStr()): Promise<number> {
+  const monthKey = monthKeyOf(today)
+  return db.transaction('rw', [db.adjustments, db.expenses, db.budgets, db.incomeSplits, db.transfers, db.months], async () => {
+    const data = await loadMonthData(monthKey)
+    let created = 0
+    for (const inp of inputs) {
+      const diff = inp.actual - summarizeBudget(data, inp.budgetId, today).remaining
+      if (diff === 0) continue
+      if (diff < 0 && inp.mode === 'untracked') {
+        await db.expenses.add({
+          id: newId(), monthKey, budgetId: inp.budgetId, categoryId: fallbackCategoryId,
+          amount: -diff, description: UNTRACKED_DESCRIPTION, date: today, createdAt: Date.now(),
+        })
+      } else {
+        await db.adjustments.add({ id: newId(), monthKey, budgetId: inp.budgetId, amount: diff, date: today, createdAt: Date.now(), note: 'Korrigjim' })
+      }
+      created++
+    }
+    return created
+  })
+}
+
+export const deleteAdjustment = (id: string) => db.adjustments.delete(id)
