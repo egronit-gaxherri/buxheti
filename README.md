@@ -39,7 +39,8 @@ hapet në iPhone, por pa offline dhe pa Face ID.
 | Tabela | Përmbajtja |
 |---|---|
 | `budgets`, `categories` | zarfet (Shtëpi, Personal…) dhe kategoritë me fjalë kyçe |
-| `incomes`, `incomeSplits` | të hyrat dhe ndarja e tyre mes buxheteve |
+| `people` | personat që japin para (Edi, mami…) |
+| `incomes`, `incomeSplits` | të hyrat (kush i dha) dhe ndarja e tyre mes buxheteve |
 | `expenses` | shpenzimet (me shënim dhe foto fature opsionale) |
 | `transfers`, `adjustments` | transferimet mes buxheteve, korrigjimet e bilancit |
 | `recurring`, `limits` | shpenzimet e përsëritura, limitet mujore për kategori |

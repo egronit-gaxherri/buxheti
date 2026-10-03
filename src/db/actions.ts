@@ -1,5 +1,5 @@
-import { db, newId } from './db'
-import type { Expense, Income, IncomeSplit, Recurring, Transfer } from './schema'
+import { db, newId, PERSON_COLORS } from './db'
+import type { Expense, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
 import { monthKeyOf, shiftMonth, todayStr } from '../lib/dates'
 import { normalize } from '../lib/categorize'
 import { pendingDates } from '../lib/recurring'
@@ -77,6 +77,8 @@ export async function remainingFor(budgetId: string, monthKey: string): Promise<
 
 export interface NewIncome {
   source: string
+  personId?: string
+  note?: string
   amount: number
   date?: string
   splits: { budgetId: string; amount: number }[]
@@ -89,7 +91,16 @@ export async function addIncome(input: NewIncome): Promise<Income> {
   if (total !== input.amount) throw new Error('Ndarjet duhet të mbledhin saktësisht shumën e të hyrës')
   const date = input.date ?? todayStr()
   const monthKey = monthKeyOf(date)
-  const income: Income = { id: newId(), monthKey, source: input.source.trim() || 'Të hyra', amount: input.amount, date, createdAt: Date.now() }
+  const income: Income = {
+    id: newId(),
+    monthKey,
+    personId: input.personId || undefined,
+    source: input.source.trim() || 'Të hyra',
+    note: input.note?.trim() || undefined,
+    amount: input.amount,
+    date,
+    createdAt: Date.now(),
+  }
   const splits: IncomeSplit[] = input.splits
     .filter((s) => s.amount > 0)
     .map((s) => ({ id: newId(), incomeId: income.id, budgetId: s.budgetId, monthKey, amount: s.amount }))
@@ -330,5 +341,42 @@ export async function reopenMonth(monthKey: string): Promise<void> {
       await db.months.put({ ...next, carryIn })
     }
     await db.months.put({ ...cur, closed: false, carried: {}, closedAt: undefined })
+  })
+}
+
+/* ───────── Personat ───────── */
+
+export async function addPerson(name: string): Promise<Person> {
+  const n = name.trim()
+  if (!n) throw new Error('Shkruaj emrin')
+  const existing = (await db.people.toArray()).find((p) => normalize(p.name) === normalize(n))
+  if (existing) {
+    if (existing.archived) await db.people.update(existing.id, { archived: false })
+    return { ...existing, archived: false }
+  }
+  const p: Person = { id: newId(), name: n, color: PERSON_COLORS[(await db.people.count()) % PERSON_COLORS.length], archived: false, createdAt: Date.now() }
+  await db.people.add(p)
+  return p
+}
+
+/** Riemërton personin dhe përditëson emrin e shfaqur te të hyrat e tij. */
+export async function renamePerson(id: string, name: string): Promise<void> {
+  const n = name.trim()
+  if (!n) throw new Error('Shkruaj emrin')
+  await db.transaction('rw', db.people, db.incomes, async () => {
+    await db.people.update(id, { name: n })
+    await db.incomes.where('personId').equals(id).modify({ source: n })
+  })
+}
+
+/** Personi me histori fshihet nga lista (arkivohet); pa histori fshihet plotësisht. */
+export async function removePerson(id: string): Promise<'deleted' | 'archived'> {
+  return db.transaction('rw', db.people, db.incomes, async () => {
+    if ((await db.incomes.where('personId').equals(id).count()) > 0) {
+      await db.people.update(id, { archived: true })
+      return 'archived' as const
+    }
+    await db.people.delete(id)
+    return 'deleted' as const
   })
 }

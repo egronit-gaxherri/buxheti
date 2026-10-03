@@ -14,13 +14,25 @@ export interface Category {
   keywords: string[] // fjalë kyçe të vogla, pa theks, për auto-kategorizim
 }
 
+/** Një person që jep para (për shtëpi ose për ty): Edi, mami, babi… */
+export interface Person {
+  id: string
+  name: string
+  color: string
+  archived: boolean
+  createdAt: number
+}
+
 export interface Income {
   id: string
   monthKey: string
-  source: string // "Rrogë", "Edi", ...
+  /** Kush i dha paratë; mungon = vetë përdoruesi (rroga). */
+  personId?: string
+  source: string // emri i personit ose "Rrogë" — për shfaqje
   amount: number
   date: string
   createdAt: number
+  note?: string
 }
 
 /** Ndarja e një të hyre mes buxheteve. Shuma e ndarjeve = shuma e të hyrës. */

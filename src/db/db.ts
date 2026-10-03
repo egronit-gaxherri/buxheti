@@ -1,8 +1,13 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   Adjustment, Budget, Category, DescriptionStat, Debt, Expense, Income,
-  IncomeSplit, Limit, MonthRecord, Recurring, Setting, Transfer,
+  IncomeSplit, Limit, MonthRecord, Person, Recurring, Setting, Transfer,
 } from './schema'
+import { normalize } from '../lib/categorize'
+
+export const PERSON_COLORS = ['#f472b6', '#fb923c', '#facc15', '#4ade80', '#2dd4bf', '#818cf8', '#f87171', '#a3e635']
+/** Burime që nuk janë persona (rroga e vetë përdoruesit etj.). */
+const GENERIC_SOURCES = new Set(['rroge', 'rroga', 'tjeter', 'te hyra', ''])
 
 export class BudgetDB extends Dexie {
   budgets!: EntityTable<Budget, 'id'>
@@ -18,6 +23,7 @@ export class BudgetDB extends Dexie {
   months!: EntityTable<MonthRecord, 'monthKey'>
   descriptions!: EntityTable<DescriptionStat, 'text'>
   settings!: EntityTable<Setting, 'key'>
+  people!: EntityTable<Person, 'id'>
 
   constructor(name = 'budgeti') {
     super(name)
@@ -36,6 +42,24 @@ export class BudgetDB extends Dexie {
       descriptions: 'text, count',
       settings: 'key',
     })
+    // v2: personat që japin para; të hyrat lidhen me personin
+    this.version(2)
+      .stores({ people: 'id, name', incomes: 'id, monthKey, date, personId' })
+      .upgrade(async (tx) => {
+        // Burimet ekzistuese me emër (p.sh. "Edi") bëhen persona
+        const ids = new Map<string, string>()
+        for (const inc of (await tx.table('incomes').toArray()) as Income[]) {
+          const key = normalize(inc.source)
+          if (GENERIC_SOURCES.has(key)) continue
+          let id = ids.get(key)
+          if (!id) {
+            id = crypto.randomUUID()
+            ids.set(key, id)
+            await tx.table('people').add({ id, name: inc.source.trim(), color: PERSON_COLORS[(ids.size - 1) % PERSON_COLORS.length], archived: false, createdAt: Date.now() })
+          }
+          await tx.table('incomes').update(inc.id, { personId: id })
+        }
+      })
   }
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useBudgets, useCategories, useIncomes, useLimits, useMonth, useRecurring } from './db/hooks'
+import { useBudgets, useCategories, useIncomes, useLimits, useMonth, usePeople, useRecurring } from './db/hooks'
 import { deleteTransfer, remainingFor, reopenMonth, runRecurring, undoExpenses } from './db/actions'
 import { loadMonthData } from './db/queries'
 import type { Expense, Transfer } from './db/schema'
@@ -20,6 +20,8 @@ import { MORE_TITLES, MorePage, type MoreView } from './components/MorePage'
 import { ArchivePage } from './components/ArchivePage'
 import { CloseMonthSheet } from './components/CloseMonthSheet'
 import { SecurityPage } from './components/SecurityPage'
+import { PeoplePage } from './components/PeoplePage'
+import { ContributorsCard } from './components/ContributorsCard'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db/db'
 import { currentMonthKey, formatMonthSQ, shiftMonth, todayStr } from './lib/dates'
@@ -43,6 +45,7 @@ export default function App() {
   const [selected, setSelected] = useState<Expense | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [closing, setClosing] = useState<string | null>(null)
+  const [incomePerson, setIncomePerson] = useState<string | undefined>()
 
   const budgets = useBudgets()
   const categories = useCategories()
@@ -51,6 +54,7 @@ export default function App() {
   const incomes = useIncomes(monthKey)
   const recurring = useRecurring()
   const limits = useLimits()
+  const people = usePeople()
   const prevKey = shiftMonth(monthKey, -1)
   const monthRecords = useLiveQuery(async () => ({ cur: (await db.months.get(monthKey)) ?? null, prev: (await db.months.get(prevKey)) ?? null }), [monthKey, prevKey])
 
@@ -69,7 +73,7 @@ export default function App() {
     if (sheet) setToast(null)
   }, [sheet])
 
-  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits || !monthRecords) return null
+  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits || !monthRecords || !people) return null
 
   async function onSaved(e: Expense, cover?: Transfer) {
     setSheet(null)
@@ -111,6 +115,11 @@ export default function App() {
   const overLimits = limits
     .map((l) => ({ l, spent: data.expenses.filter((e) => e.categoryId === l.categoryId).reduce((a, e) => a + e.amount, 0) }))
     .filter((x) => limitLevel(x.spent, x.l.amount) !== 'ok')
+
+  const openIncome = (person?: string) => {
+    setIncomePerson(person)
+    setSheet('income')
+  }
 
   const goTab = (t: Tab) => {
     setTab(t)
@@ -175,9 +184,19 @@ export default function App() {
               return s && <BudgetCard key={b.id} budget={b} s={s} forecast={forecast} />
             })}
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setSheet('income')} className="h-12 rounded-2xl border border-dashed border-line text-muted active:bg-surface">+ Të hyra</button>
+              <button onClick={() => openIncome()} className="h-12 rounded-2xl border border-dashed border-line text-muted active:bg-surface">+ Të hyra</button>
               <button onClick={() => setSheet('transfer')} className="h-12 rounded-2xl border border-dashed border-line text-muted active:bg-surface">⇄ Transferim</button>
             </div>
+            <ContributorsCard
+              incomes={incomes}
+              splits={data.incomeSplits}
+              people={people}
+              budgets={budgets}
+              onOpen={() => {
+                setTab('more')
+                setMoreView('people')
+              }}
+            />
             <h2 className="pt-2 text-lg font-semibold">Të fundit</h2>
             <ExpenseList expenses={data.expenses.slice(-30)} budgets={budgets} categories={categories} onSelect={setSelected} filters={false} />
           </div>
@@ -185,8 +204,9 @@ export default function App() {
         {tab === 'expenses' && <ExpenseList expenses={data.expenses} budgets={budgets} categories={categories} onSelect={setSelected} />}
         {tab === 'stats' && <AnalyticsPage monthKey={monthKey} data={data} prev={prev} budgets={budgets} categories={categories} />}
         {tab === 'more' && !moreView && <MorePage onOpen={setMoreView} onImport={() => setSheet('import')} onReconcile={() => setSheet('reconcile')} />}
+        {tab === 'more' && moreView === 'people' && <PeoplePage monthKey={monthKey} budgets={budgets} onAddIncome={openIncome} />}
         {tab === 'more' && moreView === 'moves' && (
-          <MovesPage budgets={budgets} incomes={incomes} splits={data.incomeSplits} transfers={data.transfers} adjustments={data.adjustments} onAddIncome={() => setSheet('income')} onAddTransfer={() => setSheet('transfer')} />
+          <MovesPage budgets={budgets} incomes={incomes} splits={data.incomeSplits} transfers={data.transfers} adjustments={data.adjustments} onAddIncome={() => openIncome()} onAddTransfer={() => setSheet('transfer')} />
         )}
         {tab === 'more' && moreView === 'recurring' && <RecurringPage budgets={budgets} categories={categories} items={recurring} />}
         {tab === 'more' && moreView === 'limits' && <LimitsPage categories={categories} limits={limits} expenses={data.expenses} />}
@@ -219,7 +239,7 @@ export default function App() {
       </nav>
 
       {sheet === 'expense' && <AddExpenseSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onSaved={onSaved} />}
-      {sheet === 'income' && <AddIncomeSheet budgets={budgets} onClose={() => setSheet(null)} />}
+      {sheet === 'income' && <AddIncomeSheet budgets={budgets} initialPerson={incomePerson} onClose={() => setSheet(null)} />}
       {sheet === 'transfer' && <TransferSheet budgets={budgets} summaries={summaries} onClose={() => setSheet(null)} />}
       {sheet === 'import' && <ImportSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onImported={onImported} />}
       {sheet === 'reconcile' && <ReconcileSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} />}

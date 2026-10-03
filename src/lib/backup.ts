@@ -2,7 +2,7 @@ import { db } from '../db/db'
 import { b64ToBytes, bytesToB64 } from './b64'
 
 export const BACKUP_APP = 'budgeti'
-export const BACKUP_VERSION = 1
+export const BACKUP_VERSION = 2 // v2: personat
 
 /**
  * Tabelat që hyjnë në backup. `settings` mbetet jashtë qëllimisht: PIN-i dhe Face ID
@@ -10,7 +10,7 @@ export const BACKUP_VERSION = 1
  */
 export const BACKUP_TABLES = [
   'budgets', 'categories', 'incomes', 'incomeSplits', 'expenses', 'transfers',
-  'adjustments', 'debts', 'recurring', 'limits', 'months', 'descriptions',
+  'adjustments', 'debts', 'recurring', 'limits', 'months', 'descriptions', 'people',
 ] as const
 type TableName = (typeof BACKUP_TABLES)[number]
 

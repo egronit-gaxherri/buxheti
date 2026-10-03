@@ -16,3 +16,7 @@ export const useIncomes = (monthKey: string) =>
   useLiveQuery(() => db.incomes.where('monthKey').equals(monthKey).reverse().sortBy('date'), [monthKey])
 export const useRecurring = () => useLiveQuery(() => db.recurring.toArray(), [])
 export const useLimits = () => useLiveQuery(() => db.limits.toArray(), [])
+export const usePeople = () => useLiveQuery(() => db.people.orderBy('name').toArray(), [])
+/** Të gjitha të hyrat dhe ndarjet (për totalet e personave: vit / gjithsej). */
+export const useAllIncomes = () =>
+  useLiveQuery(async () => ({ incomes: await db.incomes.toArray(), splits: await db.incomeSplits.toArray() }), [])

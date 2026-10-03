@@ -38,7 +38,7 @@ export function MovesPage({ budgets, incomes, splits, transfers, adjustments, on
                 <span className="font-medium">{i.source}</span>
                 <span className="tabnum font-semibold text-ok">{formatEUR(i.amount, { sign: true })}</span>
               </div>
-              <div className="mt-1 text-xs text-muted">{formatDateSQ(i.date)}</div>
+              <div className="mt-1 text-xs text-muted">{formatDateSQ(i.date)}{i.note ? ` · ${i.note}` : ''}</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {splits.filter((s) => s.incomeId === i.id).map((s) => (
                   <span key={s.id} className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-xs">
