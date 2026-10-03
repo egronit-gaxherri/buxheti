@@ -47,12 +47,16 @@ export function MovesPage({ budgets, incomes, splits, transfers, adjustments, on
                   </span>
                 ))}
               </div>
-              <button
-                onClick={() => confirm(`Të fshihet "${i.source}" ${formatEUR(i.amount)}?`) && deleteIncome(i.id)}
-                className="mt-3 text-xs text-red-400"
-              >
-                Fshi
-              </button>
+              {i.shadow ? (
+                <p className="mt-3 text-xs text-muted">Nga familja — mund ta ndryshojë vetëm kush e shtoi.</p>
+              ) : (
+                <button
+                  onClick={() => confirm(`Të fshihet "${i.source}" ${formatEUR(i.amount)}?`) && deleteIncome(i.id)}
+                  className="mt-3 text-xs text-red-400"
+                >
+                  Fshi
+                </button>
+              )}
             </li>
           ))}
         </ul>

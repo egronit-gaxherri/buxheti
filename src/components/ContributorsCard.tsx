@@ -8,11 +8,12 @@ interface Props {
   people: Person[]
   budgets: Budget[]
   onOpen: () => void
+  meId?: string
 }
 
 /** Ballina: kush dha para këtë muaj dhe ku shkuan. */
-export function ContributorsCard({ incomes, splits, people, budgets, onOpen }: Props) {
-  const contrib = contributionsByPerson(incomes, splits)
+export function ContributorsCard({ incomes, splits, people, budgets, onOpen, meId }: Props) {
+  const contrib = contributionsByPerson(incomes, splits, meId)
   if (contrib.length === 0) return null
   const name = (k: string) => (k === ME ? 'Unë (rrogë)' : (people.find((p) => p.id === k)?.name ?? '?'))
   const color = (k: string) => (k === ME ? '#94a3b8' : (people.find((p) => p.id === k)?.color ?? '#94a3b8'))

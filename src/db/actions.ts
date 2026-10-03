@@ -2,7 +2,7 @@ import { db, newId, PERSON_COLORS } from './db'
 import type { Debt, DebtDirection, DebtPayment, Expense, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
 import { budgetEffect, remainingOf } from '../lib/debts'
 import { formatEUR } from '../lib/money'
-import { monthKeyOf, shiftMonth, todayStr } from '../lib/dates'
+import { monthKeyOf, parseDate, shiftMonth, todayStr } from '../lib/dates'
 import { normalize } from '../lib/categorize'
 import { pendingDates } from '../lib/recurring'
 import { summarizeBudget } from '../lib/calc'
@@ -203,15 +203,16 @@ export async function runRecurring(today: string = todayStr()): Promise<number> 
           .and((e) => e.monthKey === monthKey)
           .count()
         if (exists) continue
-        await db.expenses.add({
-          id: newId(),
+        // id dhe createdAt deterministe: dy pajisje të familjes krijojnë të njëjtin rekord, jo dublikatë
+        await db.expenses.put({
+          id: `rec:${r.id}:${monthKey}`,
           monthKey,
           budgetId: r.budgetId,
           categoryId: r.categoryId,
           amount: r.amount,
           description: r.description,
           date,
-          createdAt: Date.now(),
+          createdAt: parseDate(date).getTime(),
           recurringId: r.id,
         })
         created++

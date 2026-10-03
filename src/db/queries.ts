@@ -1,8 +1,8 @@
-import { db } from './db'
+import { db as defaultDb, type BudgetDB } from './db'
 import type { MonthData } from '../lib/calc'
 
 /** Ngarkon gjithçka që duhet për llogaritjen e një muaji. */
-export async function loadMonthData(monthKey: string): Promise<MonthData> {
+export async function loadMonthData(monthKey: string, db: BudgetDB = defaultDb): Promise<MonthData> {
   const [budgets, incomeSplits, expenses, transfers, adjustments, month] = await Promise.all([
     db.budgets.orderBy('order').toArray(),
     db.incomeSplits.where('monthKey').equals(monthKey).toArray(),
@@ -15,7 +15,7 @@ export async function loadMonthData(monthKey: string): Promise<MonthData> {
 }
 
 /** Të hyrat (ndarjet) dhe shpenzimet e një viti, për tendencën vjetore. */
-export async function loadYear(year: number) {
+export async function loadYear(year: number, db: BudgetDB = defaultDb) {
   const range = [`${year}-01`, `${year}-12`] as const
   const [splits, expenses] = await Promise.all([
     db.incomeSplits.where('monthKey').between(range[0], range[1], true, true).toArray(),
@@ -25,7 +25,7 @@ export async function loadYear(year: number) {
 }
 
 /** Muajt që kanë të paktën një të hyrë ose shpenzim, nga më i riu. */
-export async function monthsWithData(): Promise<string[]> {
+export async function monthsWithData(db: BudgetDB = defaultDb): Promise<string[]> {
   const [a, b] = await Promise.all([db.expenses.orderBy('monthKey').uniqueKeys(), db.incomeSplits.orderBy('monthKey').uniqueKeys()])
   return [...new Set([...a, ...b].map(String))].sort().reverse()
 }

@@ -26,6 +26,32 @@ hapet në iPhone, por pa offline dhe pa Face ID.
 2. Hape adresën në **Safari** në iPhone → butoni Share → **Add to Home Screen**.
 3. Hape nga ikona: aplikacioni del në ekran të plotë dhe punon edhe pa internet.
 
+## Sinkronizimi me familjen (Supabase)
+
+Opsional. Buxheti **Shtëpi** ndahet me familjarët: secili shton shpenzime nga telefoni i vet dhe të gjithë
+shohin të njëjtën mbetje. **Personal, borxhet, limitet dhe fotot e faturave nuk largohen kurrë nga telefoni.**
+
+- Konfigurimi: kopjo `.env.example` te `.env.local` (URL + publishable key i projektit) dhe ndërto sërish.
+  Pa këto, aplikacioni punon plotësisht offline dhe ekrani "Familja" thjesht e tregon këtë.
+- Skema e serverit: `supabase/migrations/` (aplikuar te projekti `buxheti`, eu-central-1).
+- Në aplikacion: **Më shumë → Familja & sinkronizimi** → "Krijo familjen" në telefonin e parë,
+  pastaj "Bashkohu me kod" në të tjerët.
+
+Si funksionon:
+- Pa llogari/email. Çdo pajisje merr një **token sekret** kur krijon familjen ose bashkohet me kodin e ftesës;
+  serveri ruan vetëm hash-in SHA-256. Tabelat janë të mbyllura me RLS — qasja vetëm përmes funksioneve
+  `create_household`, `join_household`, `household_info`, `rotate_join_code`, `remove_member`, `sync_push`,
+  `sync_pull`, që e verifikojnë tokenin.
+- **Offline-first**: çdo ndryshim ruhet lokalisht menjëherë; sinkronizimi bëhet në sfond (pas ndryshimit,
+  kur hapet aplikacioni, kur kthehet interneti, çdo 30 s kur është i hapur).
+- Motori (`src/sync/`) krahason çdo rekord të përbashkët me hash-in e sinkronizimit të fundit, ngarkon
+  ndryshimet (fshirjet si "gurë varri") dhe shkarkon ato të të tjerëve. Konflikt: fiton i fundit që ngarkon.
+- Kur bashkohesh, "Shtëpi", kategoritë dhe personat me të njëjtin emër lidhen me ato të familjes,
+  bashkë me shpenzimet e tyre.
+- Te të tjerët, rroga jote shfaqet vetëm me pjesën që shkon në Shtëpi, me emrin tënd.
+- Kur largohet anëtari i fundit, familja dhe të dhënat e saj fshihen nga serveri.
+- Test kundër serverit të vërtetë: `SUPABASE_E2E=1 npx vitest run src/sync/e2e.test.ts`.
+
 ## Arkitektura
 
 - **Paratë në cent (integer)**; formatimi `225,30 €` bëhet vetëm në UI.
@@ -47,7 +73,8 @@ hapet në iPhone, por pa offline dhe pa Face ID.
 | `months` | mbyllja e muajit dhe bartja |
 | `descriptions` | historiku për sugjerime dhe mësimin e kategorisë |
 | `debts` | borxhet (kush i ka borxh kujt, afati) me pagesat e tyre |
-| `settings` | PIN (hash PBKDF2), Face ID, data e backup-it |
+| `settings` | PIN (hash PBKDF2), Face ID, data e backup-it, identiteti në familje |
+| `syncState` | hash-i i çdo rekordi të përbashkët në sinkronizimin e fundit |
 
 ## Siguria — çfarë mbron dhe çfarë jo
 
@@ -64,4 +91,5 @@ hapet në iPhone, por pa offline dhe pa Face ID.
 - Kur një muaj i mbyllur ndryshohet, bartja nuk përditësohet vetë: hape dhe mbylle sërish
   (aplikacioni e tregon këtë me një shirit në krye).
 - Shpenzimet e përsëritura shtohen kur hapet aplikacioni (PWA-të në iOS nuk kanë punë në sfond).
-- Sinkronizimi me Supabase nuk është ndërtuar ende.
+- Ndryshimet nga familja vijnë brenda ~30 s (ose menjëherë me "Sinkronizo tani"); s'ka njoftime push.
+- Bartja e muajit sinkronizohet, por mbyllja e muajit (shiriti "i mbyllur") është për çdo telefon veç.

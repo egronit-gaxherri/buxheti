@@ -10,9 +10,11 @@ interface Props {
   categories: Category[]
   onSelect: (e: Expense) => void
   filters?: boolean
+  /** Emri im në familje — shpenzimet e të tjerëve tregojnë "nga …". */
+  myName?: string
 }
 
-export function ExpenseList({ expenses, budgets, categories, onSelect, filters = true }: Props) {
+export function ExpenseList({ expenses, budgets, categories, onSelect, filters = true, myName }: Props) {
   const [budgetId, setBudgetId] = useState<string | null>(null)
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -86,6 +88,7 @@ export function ExpenseList({ expenses, budgets, categories, onSelect, filters =
                       <span className="size-2 rounded-full" style={{ background: bud(e.budgetId)?.color }} />
                       {bud(e.budgetId)?.name} · {cat(e.categoryId)?.name}
                       {e.receipt && ' · 📎'}
+                      {e.addedBy && e.addedBy !== myName && ` · nga ${e.addedBy}`}
                     </span>
                   </span>
                   <span className="tabnum font-semibold">−{formatEUR(e.amount)}</span>

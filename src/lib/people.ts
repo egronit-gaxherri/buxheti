@@ -2,7 +2,8 @@ import type { Income, IncomeSplit } from '../db/schema'
 
 /** Çelësi i "vetë përdoruesit" (të hyra pa person, p.sh. rroga). */
 export const ME = 'me'
-export const personKey = (i: Pick<Income, 'personId'>) => i.personId ?? ME
+/** `meId` = personi që përfaqëson këtë anëtar në familje — trajtohet si "Unë". */
+export const personKey = (i: Pick<Income, 'personId'>, meId?: string) => (i.personId && i.personId !== meId ? i.personId : ME)
 
 export interface Contribution {
   key: string // personId ose ME
@@ -13,11 +14,12 @@ export interface Contribution {
 }
 
 /** Mbledh të hyrat sipas personit, me ndarjen sipas buxhetit. Më e madhja së pari. */
-export function contributionsByPerson(incomes: Income[], splits: IncomeSplit[]): Contribution[] {
+export function contributionsByPerson(incomes: Income[], splits: IncomeSplit[], meId?: string): Contribution[] {
   const map = new Map<string, Contribution>()
-  const keyOf = new Map(incomes.map((i) => [i.id, personKey(i)]))
+  const keyOf = new Map(incomes.map((i) => [i.id, personKey(i, meId)]))
   for (const i of incomes) {
-    const c = map.get(personKey(i)) ?? { key: personKey(i), total: 0, count: 0, byBudget: {} }
+    const k = personKey(i, meId)
+    const c = map.get(k) ?? { key: k, total: 0, count: 0, byBudget: {} }
     c.total += i.amount
     c.count += 1
     map.set(c.key, c)
@@ -35,9 +37,9 @@ export type Destination = { kind: 'budget'; budgetId: string } | { kind: 'split'
  * Ku shkuan paratë herën e fundit që dha ky person — për ta parazgjedhur.
  * Një ndarje e vetme → ai buxhet; disa → përqindjet (2 decimale, që mbledhin 100).
  */
-export function lastDestination(key: string, incomes: Income[], splits: IncomeSplit[]): Destination | null {
+export function lastDestination(key: string, incomes: Income[], splits: IncomeSplit[], meId?: string): Destination | null {
   const last = incomes
-    .filter((i) => personKey(i) === key)
+    .filter((i) => personKey(i, meId) === key)
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)[0]
   if (!last) return null
   const parts = splits.filter((s) => s.incomeId === last.id && s.amount > 0)

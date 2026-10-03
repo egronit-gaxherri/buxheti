@@ -26,6 +26,10 @@ import { DebtsPage, dueText } from './components/DebtsPage'
 import { AddDebtSheet } from './components/AddDebtSheet'
 import { DebtDetailSheet } from './components/DebtDetailSheet'
 import { debtStatus, remainingOf } from './lib/debts'
+import { SyncPage } from './components/SyncPage'
+import { startSyncLoop } from './sync/controller'
+import { useSetting } from './db/settings'
+import type { SyncConfig } from './sync/types'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db/db'
 import { currentMonthKey, formatMonthSQ, shiftMonth, todayStr } from './lib/dates'
@@ -73,13 +77,19 @@ export default function App() {
   }, [])
 
   const expireToast = useCallback(() => setToast(null), [])
+  const syncCfg = useSetting<SyncConfig>('sync')
+
+  // Sinkronizimi me familjen në sfond (vetëm kur kjo pajisje është në një familje)
+  useEffect(() => (syncCfg ? startSyncLoop() : undefined), [syncCfg?.memberId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Njoftimi i vjetër s'duhet të mbulojë një fletë të re (p.sh. paralajmërimin e tejkalimit)
   useEffect(() => {
     if (sheet) setToast(null)
   }, [sheet])
 
-  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits || !monthRecords || !people || !debts) return null
+  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits || !monthRecords || !people || !debts || syncCfg === undefined) return null
+  const myPersonId = syncCfg?.myPersonId
+  const myName = syncCfg?.memberName
 
   async function onSaved(e: Expense, cover?: Transfer) {
     setSheet(null)
@@ -209,6 +219,7 @@ export default function App() {
               <button onClick={() => setSheet('transfer')} className="h-12 rounded-2xl border border-dashed border-line text-muted active:bg-surface">⇄ Transferim</button>
             </div>
             <ContributorsCard
+              meId={myPersonId}
               incomes={incomes}
               splits={data.incomeSplits}
               people={people}
@@ -219,13 +230,14 @@ export default function App() {
               }}
             />
             <h2 className="pt-2 text-lg font-semibold">Të fundit</h2>
-            <ExpenseList expenses={data.expenses.slice(-30)} budgets={budgets} categories={categories} onSelect={setSelected} filters={false} />
+            <ExpenseList expenses={data.expenses.slice(-30)} budgets={budgets} categories={categories} onSelect={setSelected} filters={false} myName={myName} />
           </div>
         )}
-        {tab === 'expenses' && <ExpenseList expenses={data.expenses} budgets={budgets} categories={categories} onSelect={setSelected} />}
+        {tab === 'expenses' && <ExpenseList expenses={data.expenses} budgets={budgets} categories={categories} onSelect={setSelected} myName={myName} />}
         {tab === 'stats' && <AnalyticsPage monthKey={monthKey} data={data} prev={prev} budgets={budgets} categories={categories} />}
         {tab === 'more' && !moreView && <MorePage onOpen={setMoreView} onImport={() => setSheet('import')} onReconcile={() => setSheet('reconcile')} />}
-        {tab === 'more' && moreView === 'people' && <PeoplePage monthKey={monthKey} budgets={budgets} onAddIncome={openIncome} />}
+        {tab === 'more' && moreView === 'family' && <SyncPage budgets={budgets} />}
+        {tab === 'more' && moreView === 'people' && <PeoplePage monthKey={monthKey} budgets={budgets} meId={myPersonId} onAddIncome={openIncome} />}
         {tab === 'more' && moreView === 'debts' && <DebtsPage debts={debts} onAdd={() => setSheet('debt')} onOpen={setDebtId} />}
         {tab === 'more' && moreView === 'moves' && (
           <MovesPage budgets={budgets} incomes={incomes} splits={data.incomeSplits} transfers={data.transfers} adjustments={data.adjustments} onAddIncome={() => openIncome()} onAddTransfer={() => setSheet('transfer')} />
@@ -261,7 +273,7 @@ export default function App() {
       </nav>
 
       {sheet === 'expense' && <AddExpenseSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onSaved={onSaved} />}
-      {sheet === 'income' && <AddIncomeSheet budgets={budgets} initialPerson={incomePerson} onClose={() => setSheet(null)} />}
+      {sheet === 'income' && <AddIncomeSheet budgets={budgets} meId={myPersonId} initialPerson={incomePerson} onClose={() => setSheet(null)} />}
       {sheet === 'transfer' && <TransferSheet budgets={budgets} summaries={summaries} onClose={() => setSheet(null)} />}
       {sheet === 'import' && <ImportSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onImported={onImported} />}
       {sheet === 'reconcile' && <ReconcileSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} />}

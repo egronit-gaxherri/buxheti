@@ -1,4 +1,4 @@
-import { db, newId } from './db'
+import { db as defaultDb, newId, type BudgetDB } from './db'
 import { DEFAULT_CATEGORIES } from '../lib/categorize'
 
 export const DEFAULT_BUDGETS = [
@@ -7,7 +7,7 @@ export const DEFAULT_BUDGETS = [
 ]
 
 /** Ekzekutohet një herë: krijon buxhetet dhe kategoritë fillestare. */
-export async function seedIfEmpty(): Promise<void> {
+export async function seedIfEmpty(db: BudgetDB = defaultDb): Promise<void> {
   await db.transaction('rw', db.budgets, db.categories, async () => {
     if ((await db.budgets.count()) === 0) {
       await db.budgets.bulkAdd(DEFAULT_BUDGETS.map((b, i) => ({ id: newId(), order: i, ...b })))

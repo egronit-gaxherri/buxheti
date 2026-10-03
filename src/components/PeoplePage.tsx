@@ -12,10 +12,11 @@ interface Props {
   monthKey: string
   budgets: Budget[]
   onAddIncome: (personKey: string) => void
+  meId?: string
 }
 
 /** Kush jep para dhe sa: totalet sipas personit për muajin, vitin ose gjithsej. */
-export function PeoplePage({ monthKey, budgets, onAddIncome }: Props) {
+export function PeoplePage({ monthKey, budgets, onAddIncome, meId }: Props) {
   const people = usePeople()
   const all = useAllIncomes()
   const [period, setPeriod] = useState<Period>('month')
@@ -29,11 +30,11 @@ export function PeoplePage({ monthKey, budgets, onAddIncome }: Props) {
   const inPeriod = (mk: string) => (period === 'month' ? mk === monthKey : period === 'year' ? mk.startsWith(year) : true)
   const incomes = all.incomes.filter((i) => inPeriod(i.monthKey))
   const splits = all.splits.filter((s) => inPeriod(s.monthKey))
-  const contrib = contributionsByPerson(incomes, splits)
+  const contrib = contributionsByPerson(incomes, splits, meId)
   const byKey = new Map(contrib.map((c) => [c.key, c]))
 
   // Të gjithë personat aktivë (edhe me 0), plus "Unë" dhe të arkivuarit që kanë të hyra në periudhë
-  const keys = [...new Set([...contrib.map((c) => c.key), ...people.filter((p) => !p.archived).map((p) => p.id)])]
+  const keys = [...new Set([...contrib.map((c) => c.key), ...people.filter((p) => !p.archived && p.id !== meId).map((p) => p.id)])]
   const label = (k: string) => (k === ME ? 'Unë (rrogë)' : (people.find((p) => p.id === k)?.name ?? '?'))
   const color = (k: string) => (k === ME ? '#94a3b8' : (people.find((p) => p.id === k)?.color ?? '#94a3b8'))
   const bud = (id: string) => budgets.find((b) => b.id === id)
@@ -91,7 +92,7 @@ export function PeoplePage({ monthKey, budgets, onAddIncome }: Props) {
       <ul className="space-y-2">
         {keys.map((k) => {
           const c = byKey.get(k)
-          const hist = incomes.filter((i) => personKey(i) === k).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
+          const hist = incomes.filter((i) => personKey(i, meId) === k).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
           const p = people.find((x) => x.id === k)
           return (
             <li key={k} className="rounded-2xl bg-surface">

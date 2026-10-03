@@ -16,13 +16,15 @@ interface Props {
   onClose: () => void
   /** Hap fletën me këtë person të zgjedhur (p.sh. nga faqja Personat). */
   initialPerson?: string
+  /** Personi që përfaqëson këtë anëtar në familje (= "Unë"). */
+  meId?: string
 }
 
 /**
  * Të hyra: KUSH i dha (unë / një person) dhe KU shkojnë (Shtëpi, Personal ose të ndara).
  * Ndarja e fundit e secilit person parazgjidhet.
  */
-export function AddIncomeSheet({ budgets, onClose, initialPerson }: Props) {
+export function AddIncomeSheet({ budgets, onClose, initialPerson, meId }: Props) {
   const people = usePeople()
   const all = useAllIncomes()
   const [who, setWho] = useState<string | null>(null) // null = ende pa zgjedhur → parazgjedhja
@@ -36,13 +38,13 @@ export function AddIncomeSheet({ budgets, onClose, initialPerson }: Props) {
   const [error, setError] = useState('')
 
   if (!people || !all) return null
-  const active = people.filter((p) => !p.archived)
+  const active = people.filter((p) => !p.archived && p.id !== meId)
   const person = (key: string) => people.find((p) => p.id === key)
 
   /** Kur zgjidhet personi, parazgjidh ku shkuan paratë e tij herën e fundit. */
   function choose(key: string) {
     setWho(key)
-    const last = lastDestination(key, all!.incomes, all!.splits)
+    const last = lastDestination(key, all!.incomes, all!.splits, meId)
     if (last?.kind === 'budget') setDest(last.budgetId)
     else if (last?.kind === 'split') {
       setDest('split')

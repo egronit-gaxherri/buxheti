@@ -5,6 +5,8 @@ export interface Budget {
   name: string
   color: string
   order: number
+  /** I ndarë me familjen (sinkronizohet). */
+  shared?: boolean
 }
 
 export interface Category {
@@ -21,6 +23,8 @@ export interface Person {
   color: string
   archived: boolean
   createdAt: number
+  /** Personi që përfaqëson një anëtar të familjes në sinkronizim. */
+  memberId?: string
 }
 
 export interface Income {
@@ -33,6 +37,8 @@ export interface Income {
   date: string
   createdAt: number
   note?: string
+  /** E hyrë e ardhur nga një anëtar tjetër i familjes (vetëm pjesa për buxhetet e përbashkëta). */
+  shadow?: boolean
 }
 
 /** Ndarja e një të hyre mes buxheteve. Shuma e ndarjeve = shuma e të hyrës. */
@@ -56,6 +62,8 @@ export interface Expense {
   date: string
   createdAt: number
   recurringId?: string
+  /** Emri i anëtarit të familjes që e shtoi (vetëm për shpenzimet e përbashkëta). */
+  addedBy?: string
 }
 
 export interface Transfer {
@@ -155,4 +163,10 @@ export interface DescriptionStat {
 export interface Setting {
   key: string
   value: unknown
+}
+
+/** Gjurmë e asaj që u sinkronizua herën e fundit për çdo rekord (`type:id` → hash). */
+export interface SyncStateRow {
+  key: string
+  hash: string
 }
