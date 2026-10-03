@@ -85,6 +85,10 @@ describe('calc', () => {
     const d = { ...base, expenses: [{ ...base.expenses[0], amount: 37000 }] }
     expect(summarizeBudget(d, 'h', '2026-10-03').low).toBe(true)
   })
+  it('buxhet bosh nuk shfaqet si i kuq', () => {
+    const empty = { ...base, incomeSplits: [], expenses: [], transfers: [] }
+    expect(summarizeBudget(empty, 'h', '2026-10-03').low).toBe(false)
+  })
   it('korrigjimi dhe bartja hyjnë në mbetje', () => {
     const d = { ...base, carryIn: { h: 1000 }, adjustments: [{ id: 'a', monthKey: '2026-10', budgetId: 'h', amount: -500, date: '', createdAt: 0 }] }
     expect(summarizeBudget(d, 'h', '2026-10-03').remaining).toBe(24530 + 1000 - 500)

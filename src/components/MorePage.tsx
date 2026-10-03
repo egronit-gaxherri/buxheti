@@ -1,14 +1,22 @@
 import type { ReactNode } from 'react'
 
-export type MoreView = 'moves' | 'recurring' | 'limits'
+export type MoreView = 'moves' | 'recurring' | 'limits' | 'archive' | 'security'
 
 const ITEMS: { id: MoreView; icon: string; title: string; hint: string }[] = [
   { id: 'moves', icon: '💶', title: 'Të hyra & transferime', hint: 'Rroga, ndarja mes buxheteve, transferimet' },
   { id: 'recurring', icon: '🔁', title: 'Shpenzime të përsëritura', hint: 'Qira, fatura, internet' },
   { id: 'limits', icon: '🎯', title: 'Limite sipas kategorisë', hint: 'Alarm në 80% dhe 100%' },
+  { id: 'archive', icon: '🗂️', title: 'Muajt & arkivi', hint: 'Mbyllja e muajit, bartja, tendenca vjetore' },
+  { id: 'security', icon: '🔐', title: 'Siguria & të dhënat', hint: 'PIN, Face ID, backup, CSV/PDF' },
 ]
 
-export const MORE_TITLES: Record<MoreView, string> = { moves: 'Të hyra & transferime', recurring: 'Të përsëritura', limits: 'Limitet' }
+export const MORE_TITLES: Record<MoreView, string> = {
+  moves: 'Të hyra & transferime',
+  recurring: 'Të përsëritura',
+  limits: 'Limitet',
+  archive: 'Muajt & arkivi',
+  security: 'Siguria & të dhënat',
+}
 
 export function MorePage({ onOpen, onImport, onReconcile, children }: { onOpen: (v: MoreView) => void; onImport: () => void; onReconcile: () => void; children?: ReactNode }) {
   return (

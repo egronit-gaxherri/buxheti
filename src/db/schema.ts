@@ -100,6 +100,9 @@ export interface MonthRecord {
   closed: boolean
   /** Bartja në këtë muaj, për çdo buxhet (budgetId → cent). */
   carryIn: Record<string, number>
+  /** Sa u bart nga ky muaj te muaji tjetër kur u mbyll (për ta zhbërë te "Hap përsëri"). */
+  carried?: Record<string, number>
+  closedAt?: number
 }
 
 export interface DescriptionStat {

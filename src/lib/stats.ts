@@ -70,6 +70,8 @@ export function forecastBudget(p: {
   upcomingFixed: number
 }): Forecast {
   if (p.monthKey !== monthKeyOf(p.today)) return { kind: 'none' }
+  // Buxhet i ri pa asnjë lëvizje: s'ka asgjë për të paralajmëruar
+  if (p.remaining === 0 && p.expenses.length === 0) return { kind: 'none' }
   if (p.remaining <= 0) return { kind: 'empty' }
   const day = Number(p.today.slice(8, 10))
   const dim = daysInMonth(p.monthKey)

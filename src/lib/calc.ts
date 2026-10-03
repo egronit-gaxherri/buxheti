@@ -47,7 +47,7 @@ export function summarizeBudget(d: MonthData, budgetId: string, today?: string):
     adjustments,
     remaining,
     ratio,
-    low: total > 0 ? ratio < LOW_RATIO : remaining <= 0,
+    low: total > 0 ? ratio < LOW_RATIO : remaining < 0,
     daysLeft,
     perDay: remaining > 0 && daysLeft > 0 ? Math.floor(remaining / daysLeft) : 0,
   }

@@ -45,8 +45,10 @@ describe('forecastBudget', () => {
     expect(forecastBudget({ ...base, today: '2026-10-02', expenses: [ex('2026-10-01', 5000)] }).kind).toBe('none')
     expect(forecastBudget({ ...base, monthKey: '2026-09', expenses: [] }).kind).toBe('none')
   })
-  it('mbetje 0 → empty; e përsëritura e pambuluar → fixed', () => {
-    expect(forecastBudget({ ...base, remaining: 0, expenses: [] }).kind).toBe('empty')
+  it('mbetje 0 → empty; buxhet i ri pa lëvizje → none; e përsëritura e pambuluar → fixed', () => {
+    expect(forecastBudget({ ...base, remaining: 0, expenses: [ex('2026-10-05', 100)] }).kind).toBe('empty')
+    expect(forecastBudget({ ...base, remaining: 0, expenses: [] }).kind).toBe('none')
+    expect(forecastBudget({ ...base, remaining: -500, expenses: [] }).kind).toBe('empty')
     expect(forecastBudget({ ...base, upcomingFixed: 30000, expenses: [] })).toMatchObject({ kind: 'runout', reason: 'fixed' })
   })
   it('upcomingRecurring', () => {

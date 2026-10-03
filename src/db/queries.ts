@@ -13,3 +13,19 @@ export async function loadMonthData(monthKey: string): Promise<MonthData> {
   ])
   return { monthKey, budgets, incomeSplits, expenses, transfers, adjustments, carryIn: month?.carryIn ?? {} }
 }
+
+/** Të hyrat (ndarjet) dhe shpenzimet e një viti, për tendencën vjetore. */
+export async function loadYear(year: number) {
+  const range = [`${year}-01`, `${year}-12`] as const
+  const [splits, expenses] = await Promise.all([
+    db.incomeSplits.where('monthKey').between(range[0], range[1], true, true).toArray(),
+    db.expenses.where('monthKey').between(range[0], range[1], true, true).toArray(),
+  ])
+  return { splits, expenses }
+}
+
+/** Muajt që kanë të paktën një të hyrë ose shpenzim, nga më i riu. */
+export async function monthsWithData(): Promise<string[]> {
+  const [a, b] = await Promise.all([db.expenses.orderBy('monthKey').uniqueKeys(), db.incomeSplits.orderBy('monthKey').uniqueKeys()])
+  return [...new Set([...a, ...b].map(String))].sort().reverse()
+}

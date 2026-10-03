@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useBudgets, useCategories, useIncomes, useLimits, useMonth, useRecurring } from './db/hooks'
-import { deleteTransfer, remainingFor, runRecurring, undoExpenses } from './db/actions'
+import { deleteTransfer, remainingFor, reopenMonth, runRecurring, undoExpenses } from './db/actions'
 import { loadMonthData } from './db/queries'
 import type { Expense, Transfer } from './db/schema'
 import { BudgetCard } from './components/BudgetCard'
@@ -17,6 +17,11 @@ import { ImportSheet } from './components/ImportSheet'
 import { ReconcileSheet } from './components/ReconcileSheet'
 import { LimitsPage } from './components/LimitsPage'
 import { MORE_TITLES, MorePage, type MoreView } from './components/MorePage'
+import { ArchivePage } from './components/ArchivePage'
+import { CloseMonthSheet } from './components/CloseMonthSheet'
+import { SecurityPage } from './components/SecurityPage'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from './db/db'
 import { currentMonthKey, formatMonthSQ, shiftMonth, todayStr } from './lib/dates'
 import { formatEUR } from './lib/money'
 import { forecastBudget, limitCrossing, limitLevel, upcomingRecurring } from './lib/stats'
@@ -37,6 +42,7 @@ export default function App() {
   const [sheet, setSheet] = useState<'expense' | 'income' | 'transfer' | 'import' | 'reconcile' | null>(null)
   const [selected, setSelected] = useState<Expense | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
+  const [closing, setClosing] = useState<string | null>(null)
 
   const budgets = useBudgets()
   const categories = useCategories()
@@ -45,6 +51,8 @@ export default function App() {
   const incomes = useIncomes(monthKey)
   const recurring = useRecurring()
   const limits = useLimits()
+  const prevKey = shiftMonth(monthKey, -1)
+  const monthRecords = useLiveQuery(async () => ({ cur: (await db.months.get(monthKey)) ?? null, prev: (await db.months.get(prevKey)) ?? null }), [monthKey, prevKey])
 
   // Shto shpenzimet e përsëritura kur hapet aplikacioni dhe kur kthehet në plan të parë
   useEffect(() => {
@@ -61,7 +69,7 @@ export default function App() {
     if (sheet) setToast(null)
   }, [sheet])
 
-  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits) return null
+  if (!budgets || !categories || !data || !prev || !summaries || !incomes || !recurring || !limits || !monthRecords) return null
 
   async function onSaved(e: Expense, cover?: Transfer) {
     setSheet(null)
@@ -130,6 +138,18 @@ export default function App() {
 
         {tab === 'home' && (
           <div className="space-y-4">
+            {monthRecords.cur?.closed && (
+              <div className="flex items-center gap-3 rounded-2xl bg-surface p-4 text-sm">
+                <span className="flex-1 text-muted">🔒 Ky muaj është i mbyllur. Ndryshimet e reja nuk e përditësojnë bartjen.</span>
+                <button onClick={() => reopenMonth(monthKey)} className="shrink-0 rounded-full bg-surface-2 px-3 py-1.5 text-xs">Hap përsëri</button>
+              </div>
+            )}
+            {isCurrent && !monthRecords.prev?.closed && (prev.expenses.length > 0 || prev.incomeSplits.length > 0) && (
+              <div className="flex items-center gap-3 rounded-2xl bg-sky-500/10 p-4 text-sm">
+                <span className="flex-1 text-sky-200">{formatMonthSQ(prevKey)} nuk është mbyllur ende. Mbylle për të parë përmbledhjen dhe për të bartur mbetjen.</span>
+                <button onClick={() => setClosing(prevKey)} className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-900">Mbylle</button>
+              </div>
+            )}
             {overLimits.length > 0 && (
               <div className="space-y-1.5 rounded-2xl bg-amber-500/10 p-4 text-sm" role="alert">
                 {overLimits.map(({ l, spent }) => {
@@ -170,6 +190,16 @@ export default function App() {
         )}
         {tab === 'more' && moreView === 'recurring' && <RecurringPage budgets={budgets} categories={categories} items={recurring} />}
         {tab === 'more' && moreView === 'limits' && <LimitsPage categories={categories} limits={limits} expenses={data.expenses} />}
+        {tab === 'more' && moreView === 'archive' && (
+          <ArchivePage
+            onOpenMonth={(mk) => {
+              setMonthKey(mk)
+              goTab('home')
+            }}
+            onClose={setClosing}
+          />
+        )}
+        {tab === 'more' && moreView === 'security' && <SecurityPage monthKey={monthKey} budgets={budgets} categories={categories} />}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-md grid-cols-5 items-center border-t border-line bg-bg/95 px-2 pt-2 backdrop-blur" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
@@ -193,6 +223,7 @@ export default function App() {
       {sheet === 'transfer' && <TransferSheet budgets={budgets} summaries={summaries} onClose={() => setSheet(null)} />}
       {sheet === 'import' && <ImportSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onImported={onImported} />}
       {sheet === 'reconcile' && <ReconcileSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} />}
+      {closing && <CloseMonthSheet monthKey={closing} budgets={budgets} onClose={() => setClosing(null)} />}
       {selected && <ExpenseDetailSheet expense={selected} budgets={budgets} categories={categories} onClose={() => setSelected(null)} />}
       {toast && <UndoToast key={toast.n} message={toast.message} detail={toast.detail} onUndo={onUndo} onExpire={expireToast} />}
     </div>

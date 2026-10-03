@@ -32,7 +32,7 @@ export function BudgetCard({ budget, s, forecast }: { budget: Budget; s: BudgetS
         <div className="mt-4 flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
           <div>
             <div className="text-xs text-muted">Sa mund të shpenzoj sot</div>
-            <div className="tabnum text-xl font-semibold" style={{ color: s.perDay === 0 ? 'var(--color-danger)' : undefined }}>
+            <div className="tabnum text-xl font-semibold" style={{ color: s.perDay === 0 && s.total > 0 ? 'var(--color-danger)' : undefined }}>
               {formatEUR(s.perDay)}
             </div>
           </div>

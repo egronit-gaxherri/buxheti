@@ -1,6 +1,6 @@
 import { db, newId } from './db'
 import type { Expense, Income, IncomeSplit, Recurring, Transfer } from './schema'
-import { monthKeyOf, todayStr } from '../lib/dates'
+import { monthKeyOf, shiftMonth, todayStr } from '../lib/dates'
 import { normalize } from '../lib/categorize'
 import { pendingDates } from '../lib/recurring'
 import { summarizeBudget } from '../lib/calc'
@@ -297,3 +297,38 @@ export async function reconcileBalances(inputs: ReconcileInput[], fallbackCatego
 }
 
 export const deleteAdjustment = (id: string) => db.adjustments.delete(id)
+
+/* ───────── Mbyllja e muajit ───────── */
+
+/**
+ * Mbyll muajin dhe vendos bartjen (budgetId → cent) si `carryIn` te muaji tjetër.
+ * Nëse muaji ishte mbyllur më parë, bartja e vjetër hiqet së pari.
+ */
+export async function closeMonth(monthKey: string, carry: Record<string, number>): Promise<void> {
+  const nextKey = shiftMonth(monthKey, 1)
+  await db.transaction('rw', db.months, async () => {
+    const cur = (await db.months.get(monthKey)) ?? { monthKey, closed: false, carryIn: {} }
+    const next = (await db.months.get(nextKey)) ?? { monthKey: nextKey, closed: false, carryIn: {} }
+    const carryIn = { ...next.carryIn }
+    for (const id of Object.keys(cur.carried ?? {})) delete carryIn[id]
+    for (const [id, amount] of Object.entries(carry)) if (amount !== 0) carryIn[id] = amount
+    await db.months.put({ ...next, carryIn })
+    await db.months.put({ ...cur, closed: true, carried: carry, closedAt: Date.now() })
+  })
+}
+
+/** Rihap muajin dhe heq bartjen që kishte dërguar te muaji tjetër. */
+export async function reopenMonth(monthKey: string): Promise<void> {
+  const nextKey = shiftMonth(monthKey, 1)
+  await db.transaction('rw', db.months, async () => {
+    const cur = await db.months.get(monthKey)
+    if (!cur) return
+    const next = await db.months.get(nextKey)
+    if (next) {
+      const carryIn = { ...next.carryIn }
+      for (const id of Object.keys(cur.carried ?? {})) delete carryIn[id]
+      await db.months.put({ ...next, carryIn })
+    }
+    await db.months.put({ ...cur, closed: false, carried: {}, closedAt: undefined })
+  })
+}
