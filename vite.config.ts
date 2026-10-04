@@ -2,6 +2,12 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { existsSync, readFileSync } from 'node:fs'
+
+// HTTPS lokal për iPhone (npm run iphone): certifikata nga mkcert te certs/ (jashtë git-it)
+const cert = 'certs/iphone.pem'
+const key = 'certs/iphone-key.pem'
+const https = process.env.BUXHETI_HTTPS && existsSync(cert) && existsSync(key) ? { cert: readFileSync(cert), key: readFileSync(key) } : undefined
 
 export default defineConfig({
   plugins: [
@@ -36,5 +42,6 @@ export default defineConfig({
         },
       }),
   ],
+  preview: { https },
   test: { environment: 'node', setupFiles: ['fake-indexeddb/auto'] },
 })

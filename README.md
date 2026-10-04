@@ -16,7 +16,26 @@ npm run preview    # build-i i prodhimit në http://localhost:5181 (me service w
 node scripts/gen-icons.mjs   # rigjeneron ikonat PNG
 ```
 
-## Instalimi në iPhone
+## Instalimi në iPhone nga Mac-u (pa publikim)
+
+Aplikacioni shërbehet me HTTPS nga Mac-u në WiFi. Pas instalimit punon offline edhe kur Mac-u është i fikur;
+Mac-u duhet vetëm për instalimin dhe për përditësime.
+
+Një herë në Mac:
+```bash
+brew install mkcert
+mkdir -p certs && mkcert -cert-file certs/iphone.pem -key-file certs/iphone-key.pem "$(scutil --get LocalHostName).local" localhost 127.0.0.1
+```
+Nis serverin (edhe për çdo përditësim):
+```bash
+npm run iphone        # https://<emri-i-mac-ut>.local:5443
+```
+Në iPhone, një herë: instalo dhe beso certifikatën rrënjë të mkcert (`$(mkcert -CAROOT)/rootCA.pem` — **kurrë**
+`rootCA-key.pem`), hap adresën në Safari → Share → Add to Home Screen. Përdore vetëm nga ikona: të dhënat
+e ikonës janë të ndara nga ato të Safari-t. Emri i Mac-ut (`.local`) nuk duhet ndryshuar, se ndryshon adresa
+dhe aplikacioni nis bosh — mbaj backup.
+
+## Instalimi në iPhone me publikim
 
 Service worker-i (offline) dhe Face ID kërkojnë **HTTPS**. Një adresë `http://192.168.x.x` në WiFi
 hapet në iPhone, por pa offline dhe pa Face ID.
