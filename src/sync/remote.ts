@@ -29,7 +29,11 @@ export async function rpc<T>(fn: string, args: Record<string, unknown>, opts: { 
       body: JSON.stringify(args),
     })
   } catch {
-    throw new RemoteError('offline', 'Pa lidhje me internetin.')
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false
+    throw new RemoteError(
+      'offline',
+      isOffline ? 'Pa lidhje me internetin.' : 'Serveri i sinkronizimit (Supabase) nuk u arrit. Kontrollo lidhjen ose nëse projekti është aktiv në Supabase.',
+    )
   }
   const body = await res.json().catch(() => null)
   if (!res.ok) {

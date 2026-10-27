@@ -124,7 +124,8 @@ export function SyncPage({ budgets }: { budgets: Budget[] }) {
     : status.offline ? `Pa internet — ndryshimet ruhen dhe dërgohen kur të kthehet lidhja. Sinkronizuar ${ago(cfg.lastSyncAt)}.`
     : `Sinkronizuar ${ago(cfg.lastSyncAt)}`
   const dot = status.state === 'error' ? 'bg-red-400' : status.offline ? 'bg-amber-400' : status.state === 'syncing' ? 'bg-sky-400 animate-pulse' : 'bg-emerald-400'
-  const invite = `Bashkohu me buxhetin e familjes "${cfg.householdName}" në Buxheti: ${location.origin}\nKodi: ${fmtCode(info?.join_code ?? cfg.joinCode)}`
+  const appUrl = `${location.origin}${import.meta.env.BASE_URL}`
+  const invite = `Bashkohu me buxhetin e familjes "${cfg.householdName}" në Buxheti: ${appUrl}\nKodi: ${fmtCode(info?.join_code ?? cfg.joinCode)}`
 
   return (
     <div className="space-y-4">

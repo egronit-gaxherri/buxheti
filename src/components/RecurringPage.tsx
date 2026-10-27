@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addRecurring, deleteRecurring, setRecurringActive } from '../db/actions'
+import { addRecurring, deleteRecurring, setRecurringActive, updateRecurring } from '../db/actions'
 import type { Budget, Category, Recurring } from '../db/schema'
 import { FALLBACK_CATEGORY_NAME, guessCategory } from '../lib/categorize'
 import { formatEUR, parseAmount } from '../lib/money'
@@ -10,9 +10,12 @@ interface Props {
   items: Recurring[]
 }
 
+const toText = (c: number) => (c / 100).toFixed(2).replace('.', ',').replace(',00', '')
+
 /** Shpenzime që shtohen vetë çdo muaj (qira, fatura, internet). */
 export function RecurringPage({ budgets, categories, items }: Props) {
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [desc, setDesc] = useState('')
   const [amount, setAmount] = useState('')
   const [day, setDay] = useState('1')
@@ -25,12 +28,31 @@ export function RecurringPage({ budgets, categories, items }: Props) {
   const dayNum = Number(day)
   const valid = cents > 0 && desc.trim() !== '' && dayNum >= 1 && dayNum <= 31
 
-  async function save() {
-    await addRecurring({ budgetId, categoryId: effectiveCat, amount: cents, description: desc, dayOfMonth: dayNum })
+  function resetForm() {
     setAdding(false)
+    setEditingId(null)
     setDesc('')
     setAmount('')
+    setDay('1')
+    setBudgetId(budgets[0].id)
     setCatId(null)
+  }
+
+  function startEdit(r: Recurring) {
+    setEditingId(r.id)
+    setAdding(true)
+    setDesc(r.description)
+    setAmount(toText(r.amount))
+    setDay(String(r.dayOfMonth))
+    setBudgetId(r.budgetId)
+    setCatId(r.categoryId)
+  }
+
+  async function save() {
+    const payload = { budgetId, categoryId: effectiveCat, amount: cents, description: desc, dayOfMonth: dayNum }
+    if (editingId) await updateRecurring(editingId, payload)
+    else await addRecurring(payload)
+    resetForm()
   }
 
   const bud = (id: string) => budgets.find((b) => b.id === id)
@@ -65,8 +87,10 @@ export function RecurringPage({ budgets, categories, items }: Props) {
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setAdding(false)} className="h-12 rounded-xl bg-surface-2">Anulo</button>
-            <button disabled={!valid} onClick={save} className="h-12 rounded-xl bg-white font-bold text-slate-900 disabled:opacity-35">Ruaj</button>
+            <button onClick={resetForm} className="h-12 rounded-xl bg-surface-2">Anulo</button>
+            <button disabled={!valid} onClick={save} className="h-12 rounded-xl bg-white font-bold text-slate-900 disabled:opacity-35">
+              {editingId ? 'Përditëso' : 'Ruaj'}
+            </button>
           </div>
         </div>
       )}
@@ -83,8 +107,11 @@ export function RecurringPage({ budgets, categories, items }: Props) {
               </div>
             </div>
             <span className="tabnum font-semibold">{formatEUR(r.amount)}</span>
-            <div className="flex flex-col gap-1 text-xs">
-              <button onClick={() => setRecurringActive(r.id, !r.active)} className="text-sky-300">{r.active ? 'Pusho' : 'Aktivizo'}</button>
+            <div className="flex flex-col items-end gap-1 text-xs">
+              <div className="flex gap-2">
+                <button onClick={() => startEdit(r)} className="text-muted">Ndrysho</button>
+                <button onClick={() => setRecurringActive(r.id, !r.active)} className="text-sky-300">{r.active ? 'Pusho' : 'Aktivizo'}</button>
+              </div>
               <button onClick={() => confirm(`Të fshihet "${r.description}"?`) && deleteRecurring(r.id)} className="text-red-400">Fshi</button>
             </div>
           </li>

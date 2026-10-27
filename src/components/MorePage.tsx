@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react'
-
 export type MoreView = 'goals' | 'family' | 'people' | 'debts' | 'moves' | 'recurring' | 'limits' | 'archive' | 'security'
 
 const ITEMS: { id: MoreView; icon: string; title: string; hint: string }[] = [
@@ -26,7 +24,7 @@ export const MORE_TITLES: Record<MoreView, string> = {
   security: 'Siguria & të dhënat',
 }
 
-export function MorePage({ onOpen, onImport, onReconcile, children }: { onOpen: (v: MoreView) => void; onImport: () => void; onReconcile: () => void; children?: ReactNode }) {
+export function MorePage({ onOpen, onImport, onReconcile }: { onOpen: (v: MoreView) => void; onImport: () => void; onReconcile: () => void }) {
   return (
     <div className="space-y-2">
       {ITEMS.map((i) => (
@@ -53,7 +51,6 @@ export function MorePage({ onOpen, onImport, onReconcile, children }: { onOpen: 
           <span className="text-muted">›</span>
         </button>
       ))}
-      {children}
     </div>
   )
 }

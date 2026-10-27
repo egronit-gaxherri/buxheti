@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from './db'
 import { seedIfEmpty } from './seed'
-import { addExpense, addIncome, remainingFor, suggestDescriptions, undoExpense } from './actions'
+import { addExpense, addIncome, remainingFor, suggestDescriptions, undoExpense, updateExpense, updateIncome, updateRecurring } from './actions'
 
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()))
@@ -18,6 +18,28 @@ describe('actions', () => {
     await undoExpense(e)
     expect(await remainingFor(home.id, '2026-10')).toBe(30000)
     expect(await suggestDescriptions('ben')).toHaveLength(0)
+  })
+  it('ndryshimi i shpenzimit, të hyrës dhe të përsëriturës', async () => {
+    const [home, personal] = await db.budgets.orderBy('order').toArray()
+    const inc = await addIncome({ source: 'Rrogë', amount: 30000, date: '2026-10-01', splits: [{ budgetId: home.id, amount: 30000 }] })
+    await updateIncome(inc.id, {
+      source: 'Rrogë',
+      amount: 35000,
+      date: '2026-10-02',
+      splits: [{ budgetId: home.id, amount: 15000 }, { budgetId: personal.id, amount: 20000 }],
+    })
+    expect(await remainingFor(home.id, '2026-10')).toBe(15000)
+    expect(await remainingFor(personal.id, '2026-10')).toBe(20000)
+
+    const e = await addExpense({ amount: 1000, description: 'Buk', budgetId: home.id, categoryId: 'x', date: '2026-10-02' })
+    await updateExpense(e.id, { amount: 2500, budgetId: personal.id, date: '2026-09-28', description: 'Market' })
+    expect(await remainingFor(home.id, '2026-10')).toBe(15000)
+    expect(await remainingFor(personal.id, '2026-09')).toBe(-2500)
+    expect((await db.expenses.get(e.id))?.monthKey).toBe('2026-09')
+
+    await db.recurring.add({ id: 'r-edit', budgetId: home.id, categoryId: 'x', amount: 1000, description: 'Internet', dayOfMonth: 5, active: true, lastRunMonth: '2026-10' })
+    await updateRecurring('r-edit', { budgetId: personal.id, categoryId: 'y', amount: 1500, description: 'Internet Fibër', dayOfMonth: 10 })
+    expect(await db.recurring.get('r-edit')).toMatchObject({ budgetId: personal.id, categoryId: 'y', amount: 1500, description: 'Internet Fibër', dayOfMonth: 10 })
   })
   it('refuzon shumë 0 dhe ndarje të gabuar', async () => {
     const [home] = await db.budgets.toArray()

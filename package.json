@@ -5,11 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host --port 5180",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host --port 5181",
     "test": "vitest run",
-    "typecheck": "tsc -b",
-    "iphone": "vite build && BUXHETI_HTTPS=1 vite preview --host --port 5443 --strictPort"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "dexie": "^4.4.6",

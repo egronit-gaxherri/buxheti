@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useBudgets, useCategories, useDebts, useGoals, useIncomes, useLimits, useMonth, usePeople, useRecurring } from './db/hooks'
-import { deleteTransfer, remainingFor, reopenMonth, runGoalAutoSave, runRecurring, undoExpenses } from './db/actions'
+import { deleteTransfer, refreshClosedMonthCarry, remainingFor, reopenMonth, runGoalAutoSave, runRecurring, undoExpenses } from './db/actions'
 import { loadMonthData } from './db/queries'
-import type { Expense, Transfer } from './db/schema'
+import type { Expense, Income, Transfer } from './db/schema'
 import { BudgetCard } from './components/BudgetCard'
 import { ExpenseList } from './components/ExpenseList'
 import { AddExpenseSheet } from './components/AddExpenseSheet'
@@ -30,7 +30,7 @@ import { SyncPage } from './components/SyncPage'
 import { GoalCard, GoalsPage } from './components/GoalsPage'
 import { GoalDetailSheet, GoalEditSheet } from './components/GoalSheets'
 import { InsightsSection } from './components/InsightsSection'
-import { startSyncLoop } from './sync/controller'
+import { startSyncLoop, useSyncStatus } from './sync/controller'
 import { useSetting } from './db/settings'
 import type { SyncConfig } from './sync/types'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -57,6 +57,7 @@ export default function App() {
   const [toast, setToast] = useState<ToastState | null>(null)
   const [closing, setClosing] = useState<string | null>(null)
   const [incomePerson, setIncomePerson] = useState<string | undefined>()
+  const [editingIncome, setEditingIncome] = useState<Income | undefined>()
   const [debtId, setDebtId] = useState<string | null>(null)
   const [goalId, setGoalId] = useState<string | null>(null)
   const [editGoal, setEditGoal] = useState<string | null>(null)
@@ -84,6 +85,7 @@ export default function App() {
 
   const expireToast = useCallback(() => setToast(null), [])
   const syncCfg = useSetting<SyncConfig>('sync')
+  const syncStatus = useSyncStatus()
 
   // Sinkronizimi me familjen në sfond (vetëm kur kjo pajisje është në një familje)
   useEffect(() => (syncCfg ? startSyncLoop() : undefined), [syncCfg?.memberId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -139,7 +141,13 @@ export default function App() {
     .filter((x) => limitLevel(x.spent, x.l.amount) !== 'ok')
 
   const openIncome = (person?: string) => {
+    setEditingIncome(undefined)
     setIncomePerson(person)
+    setSheet('income')
+  }
+  const openEditIncome = (inc: Income) => {
+    setEditingIncome(inc)
+    setIncomePerson(undefined)
     setSheet('income')
   }
 
@@ -159,14 +167,40 @@ export default function App() {
     setMoreView(null)
   }
   const title = tab === 'more' && moreView ? MORE_TITLES[moreView] : null
+  const carryDrifted =
+    monthRecords.cur?.closed &&
+    summaries.some((s) => {
+      const carried = monthRecords.cur?.carried?.[s.budgetId] ?? 0
+      return carried !== 0 && s.remaining !== carried
+    })
+  const syncDot =
+    syncStatus.state === 'error' || syncStatus.removed ? 'bg-red-400'
+    : syncStatus.offline ? 'bg-amber-400'
+    : syncStatus.state === 'syncing' ? 'bg-sky-400 animate-pulse'
+    : 'bg-emerald-400'
 
   return (
     <div className="mx-auto flex h-full max-w-md flex-col">
       <header className="flex items-center justify-between px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button onClick={() => setMonthKey(shiftMonth(monthKey, -1))} className="grid size-10 place-items-center rounded-full bg-surface text-lg" aria-label="Muaji i kaluar">‹</button>
-        <button onClick={() => setMonthKey(currentMonthKey())} className="text-lg font-semibold">
-          {formatMonthSQ(monthKey)}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMonthKey(currentMonthKey())} className="text-lg font-semibold">
+            {formatMonthSQ(monthKey)}
+          </button>
+          {syncCfg && (
+            <button
+              onClick={() => {
+                setTab('more')
+                setMoreView('family')
+              }}
+              aria-label="Gjendja e sinkronizimit me familjen"
+              className="flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-xs text-muted"
+            >
+              <span className={`size-2 rounded-full ${syncDot}`} />
+              <span>{syncCfg.householdName}</span>
+            </button>
+          )}
+        </div>
         <button onClick={() => setMonthKey(shiftMonth(monthKey, 1))} disabled={isCurrent} className="grid size-10 place-items-center rounded-full bg-surface text-lg disabled:opacity-30" aria-label="Muaji tjetër">›</button>
       </header>
 
@@ -181,9 +215,20 @@ export default function App() {
         {tab === 'home' && (
           <div className="space-y-4">
             {monthRecords.cur?.closed && (
-              <div className="flex items-center gap-3 rounded-2xl bg-surface p-4 text-sm">
-                <span className="flex-1 text-muted">🔒 Ky muaj është i mbyllur. Ndryshimet e reja nuk e përditësojnë bartjen.</span>
-                <button onClick={() => reopenMonth(monthKey)} className="shrink-0 rounded-full bg-surface-2 px-3 py-1.5 text-xs">Hap përsëri</button>
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-surface p-4 text-sm">
+                <span className="min-w-0 flex-1 text-muted">
+                  🔒 Ky muaj është i mbyllur.{carryDrifted ? ' Mbetja ka ndryshuar pas mbylljes.' : ''}
+                </span>
+                <div className="flex shrink-0 gap-2">
+                  {carryDrifted && (
+                    <button onClick={() => refreshClosedMonthCarry(monthKey)} className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-900">
+                      Përditëso bartjen
+                    </button>
+                  )}
+                  <button onClick={() => reopenMonth(monthKey)} className="rounded-full bg-surface-2 px-3 py-1.5 text-xs">
+                    Hap përsëri
+                  </button>
+                </div>
               </div>
             )}
             {isCurrent && !monthRecords.prev?.closed && (prev.expenses.length > 0 || prev.incomeSplits.length > 0) && (
@@ -262,7 +307,16 @@ export default function App() {
         {tab === 'more' && moreView === 'people' && <PeoplePage monthKey={monthKey} budgets={budgets} meId={myPersonId} onAddIncome={openIncome} />}
         {tab === 'more' && moreView === 'debts' && <DebtsPage debts={debts} onAdd={() => setSheet('debt')} onOpen={setDebtId} />}
         {tab === 'more' && moreView === 'moves' && (
-          <MovesPage budgets={budgets} incomes={incomes} splits={data.incomeSplits} transfers={data.transfers} adjustments={data.adjustments} onAddIncome={() => openIncome()} onAddTransfer={() => setSheet('transfer')} />
+          <MovesPage
+            budgets={budgets}
+            incomes={incomes}
+            splits={data.incomeSplits}
+            transfers={data.transfers}
+            adjustments={data.adjustments}
+            onAddIncome={() => openIncome()}
+            onEditIncome={openEditIncome}
+            onAddTransfer={() => setSheet('transfer')}
+          />
         )}
         {tab === 'more' && moreView === 'recurring' && <RecurringPage budgets={budgets} categories={categories} items={recurring} />}
         {tab === 'more' && moreView === 'limits' && <LimitsPage categories={categories} limits={limits} expenses={data.expenses} />}
@@ -295,7 +349,7 @@ export default function App() {
       </nav>
 
       {sheet === 'expense' && <AddExpenseSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onSaved={onSaved} />}
-      {sheet === 'income' && <AddIncomeSheet budgets={budgets} meId={myPersonId} initialPerson={incomePerson} onClose={() => setSheet(null)} />}
+      {sheet === 'income' && <AddIncomeSheet budgets={budgets} meId={myPersonId} initialPerson={incomePerson} income={editingIncome} onClose={() => { setSheet(null); setEditingIncome(undefined) }} />}
       {sheet === 'transfer' && <TransferSheet budgets={budgets} summaries={summaries} onClose={() => setSheet(null)} />}
       {sheet === 'import' && <ImportSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} onImported={onImported} />}
       {sheet === 'reconcile' && <ReconcileSheet budgets={budgets} categories={categories} onClose={() => setSheet(null)} />}

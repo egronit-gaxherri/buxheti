@@ -11,7 +11,7 @@ import { yearTrend, monthTotals } from './archive'
 import { exportBackup, importBackup, validateBackup } from './backup'
 import { db } from '../db/db'
 import { seedIfEmpty } from '../db/seed'
-import { addExpense, addIncome, addTransfer, closeMonth, remainingFor, reopenMonth } from '../db/actions'
+import { addExpense, addIncome, addTransfer, closeMonth, refreshClosedMonthCarry, remainingFor, reopenMonth } from '../db/actions'
 import { loadMonthData, monthsWithData } from '../db/queries'
 import type { MonthData } from './calc'
 
@@ -111,8 +111,13 @@ describe('arkivi', () => {
     expect(await remainingFor(h.id, '2026-10')).toBe(15000)
     expect(await remainingFor(p.id, '2026-10')).toBe(0)
     expect((await db.months.get('2026-09'))?.closed).toBe(true)
-    await closeMonth('2026-09', { [h.id]: 15000, [p.id]: 10000 })
-    expect(await remainingFor(h.id, '2026-10')).toBe(15000)
+    // Ndryshim pas mbylljes → refreshClosedMonthCarry përditëson bartjen e Shtëpisë
+    await addExpense({ amount: 2000, description: 'b', budgetId: h.id, categoryId: 'x', date: '2026-09-12' })
+    await refreshClosedMonthCarry('2026-09')
+    expect(await remainingFor(h.id, '2026-10')).toBe(13000)
+    expect(await remainingFor(p.id, '2026-10')).toBe(0)
+    await closeMonth('2026-09', { [h.id]: 13000, [p.id]: 10000 })
+    expect(await remainingFor(h.id, '2026-10')).toBe(13000)
     expect(await remainingFor(p.id, '2026-10')).toBe(10000)
     await reopenMonth('2026-09')
     expect(await remainingFor(h.id, '2026-10')).toBe(0)

@@ -8,11 +8,6 @@ export function formatEUR(cents: number, opts: { sign?: boolean } = {}): string 
   return `${sign}${grouped},${frac} €`
 }
 
-/** Si formatEUR, por pa pjesën dhjetore kur është e plotë (225 €). */
-export function formatEURShort(cents: number): string {
-  return cents % 100 === 0 ? formatEUR(cents).replace(',00', '') : formatEUR(cents)
-}
-
 /**
  * Parson një shumë të shkruar nga njeriu në cent.
  * Pranon: "20", "20 euro", "1.5", "2,8 euro", "1.250,50", "€3".

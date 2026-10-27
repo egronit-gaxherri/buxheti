@@ -1,6 +1,5 @@
 import type { Expense, IncomeSplit } from '../db/schema'
 import type { MonthData } from './calc'
-import { summarizeMonth } from './calc'
 
 export interface MonthTotals {
   monthKey: string
@@ -16,11 +15,6 @@ export function monthTotals(d: MonthData): MonthTotals {
   const income = sum(d.incomeSplits)
   const spent = sum(d.expenses)
   return { monthKey: d.monthKey, income, spent, saved: income - spent }
-}
-
-/** Përmbledhja për mbylljen e muajit: totalet + mbetja e çdo buxheti. */
-export function closingSummary(d: MonthData, today?: string) {
-  return { totals: monthTotals(d), budgets: summarizeMonth(d, today) }
 }
 
 /** 12 muajt e vitit (edhe ata pa të dhëna, me 0). */

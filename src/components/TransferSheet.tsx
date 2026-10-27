@@ -9,16 +9,13 @@ import { todayStr } from '../lib/dates'
 interface Props {
   budgets: Budget[]
   summaries: BudgetSummary[]
-  initialFrom?: string
-  initialAmount?: number
   onClose: () => void
-  onDone?: () => void
 }
 
-export function TransferSheet({ budgets, summaries, initialFrom, initialAmount, onClose, onDone }: Props) {
-  const [from, setFrom] = useState(initialFrom ?? budgets[1]?.id ?? budgets[0].id)
-  const [to, setTo] = useState(budgets.find((b) => b.id !== (initialFrom ?? budgets[1]?.id))?.id ?? budgets[0].id)
-  const [amount, setAmount] = useState(initialAmount ? (initialAmount / 100).toFixed(2).replace('.', ',') : '')
+export function TransferSheet({ budgets, summaries, onClose }: Props) {
+  const [from, setFrom] = useState(budgets[1]?.id ?? budgets[0].id)
+  const [to, setTo] = useState(budgets.find((b) => b.id !== budgets[1]?.id)?.id ?? budgets[0].id)
+  const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const cents = parseAmount(amount) ?? 0
   const fromLeft = summaries.find((s) => s.budgetId === from)?.remaining ?? 0
@@ -26,7 +23,6 @@ export function TransferSheet({ budgets, summaries, initialFrom, initialAmount, 
 
   async function save() {
     await addTransfer({ fromBudgetId: from, toBudgetId: to, amount: cents, note, date: todayStr() })
-    onDone?.()
     onClose()
   }
 

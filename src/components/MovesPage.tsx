@@ -10,11 +10,12 @@ interface Props {
   transfers: Transfer[]
   adjustments: Adjustment[]
   onAddIncome: () => void
+  onEditIncome: (income: Income) => void
   onAddTransfer: () => void
 }
 
 /** Të hyrat dhe transferimet e muajit. */
-export function MovesPage({ budgets, incomes, splits, transfers, adjustments, onAddIncome, onAddTransfer }: Props) {
+export function MovesPage({ budgets, incomes, splits, transfers, adjustments, onAddIncome, onEditIncome, onAddTransfer }: Props) {
   const bud = (id: string) => budgets.find((b) => b.id === id)
   const total = incomes.reduce((a, i) => a + i.amount, 0)
 
@@ -50,12 +51,15 @@ export function MovesPage({ budgets, incomes, splits, transfers, adjustments, on
               {i.shadow ? (
                 <p className="mt-3 text-xs text-muted">Nga familja — mund ta ndryshojë vetëm kush e shtoi.</p>
               ) : (
-                <button
-                  onClick={() => confirm(`Të fshihet "${i.source}" ${formatEUR(i.amount)}?`) && deleteIncome(i.id)}
-                  className="mt-3 text-xs text-red-400"
-                >
-                  Fshi
-                </button>
+                <div className="mt-3 flex gap-4 text-xs">
+                  <button onClick={() => onEditIncome(i)} className="text-sky-300">Ndrysho</button>
+                  <button
+                    onClick={() => confirm(`Të fshihet "${i.source}" ${formatEUR(i.amount)}?`) && deleteIncome(i.id)}
+                    className="text-red-400"
+                  >
+                    Fshi
+                  </button>
+                </div>
               )}
             </li>
           ))}

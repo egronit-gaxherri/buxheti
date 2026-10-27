@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Sheet } from './Sheet'
-import { addIncome, addPerson } from '../db/actions'
+import { addIncome, addPerson, updateIncome } from '../db/actions'
 import { useAllIncomes, usePeople } from '../db/hooks'
-import type { Budget } from '../db/schema'
+import type { Budget, Income } from '../db/schema'
 import { formatEUR, parseAmount } from '../lib/money'
 import { todayStr } from '../lib/dates'
 import { resolveSplits, type SplitRow } from '../lib/split'
-import { lastDestination, ME } from '../lib/people'
+import { lastDestination, ME, personKey } from '../lib/people'
 
 const eur = (s: string) => parseAmount(s) ?? 0
+const toText = (c: number) => (c / 100).toFixed(2).replace('.', ',').replace(',00', '')
 type Dest = string | 'split' // budgetId ose ndarje
 
 interface Props {
@@ -18,21 +19,23 @@ interface Props {
   initialPerson?: string
   /** Personi që përfaqëson këtë anëtar në familje (= "Unë"). */
   meId?: string
+  /** Kur jepet, fleta redakton këtë të hyrë ekzistuese. */
+  income?: Income
 }
 
 /**
  * Të hyra: KUSH i dha (unë / një person) dhe KU shkojnë (Shtëpi, Personal ose të ndara).
  * Ndarja e fundit e secilit person parazgjidhet.
  */
-export function AddIncomeSheet({ budgets, onClose, initialPerson, meId }: Props) {
+export function AddIncomeSheet({ budgets, onClose, initialPerson, meId, income }: Props) {
   const people = usePeople()
   const all = useAllIncomes()
   const [who, setWho] = useState<string | null>(null) // null = ende pa zgjedhur → parazgjedhja
   const [newName, setNewName] = useState('')
   const [adding, setAdding] = useState(false)
-  const [amount, setAmount] = useState('')
-  const [note, setNote] = useState('')
-  const [date, setDate] = useState(todayStr())
+  const [amount, setAmount] = useState(income ? toText(income.amount) : '')
+  const [note, setNote] = useState(income?.note ?? '')
+  const [date, setDate] = useState(income?.date ?? todayStr())
   const [dest, setDest] = useState<Dest | null>(null)
   const [rows, setRows] = useState<SplitRow[]>(budgets.map((b) => ({ budgetId: b.id, mode: 'eur', value: '' })))
   const [error, setError] = useState('')
@@ -52,7 +55,18 @@ export function AddIncomeSheet({ budgets, onClose, initialPerson, meId }: Props)
     } else setDest(key === ME ? 'split' : budgets[0].id) // personat zakonisht japin për shtëpi
   }
   if (who === null) {
-    choose(initialPerson ?? ME)
+    if (income) {
+      setWho(personKey(income, meId))
+      const incSplits = all.splits.filter((s) => s.incomeId === income.id && s.amount > 0)
+      if (incSplits.length === 1) setDest(incSplits[0].budgetId)
+      else {
+        setDest('split')
+        const map = Object.fromEntries(incSplits.map((s) => [s.budgetId, toText(s.amount)]))
+        setRows(budgets.map((b) => ({ budgetId: b.id, mode: 'eur', value: map[b.id] ?? '' })))
+      }
+    } else {
+      choose(initialPerson ?? ME)
+    }
     return null
   }
 
@@ -76,14 +90,16 @@ export function AddIncomeSheet({ budgets, onClose, initialPerson, meId }: Props)
 
   async function save() {
     try {
-      await addIncome({
+      const payload = {
         source: who === ME ? 'Rrogë' : (person(who!)?.name ?? 'Të hyra'),
         personId: who === ME ? undefined : who!,
         note,
         amount: total,
         date,
         splits: Object.entries(amounts).map(([budgetId, amount]) => ({ budgetId, amount })),
-      })
+      }
+      if (income) await updateIncome(income.id, payload)
+      else await addIncome(payload)
       onClose()
     } catch (e) {
       setError((e as Error).message)
@@ -93,7 +109,7 @@ export function AddIncomeSheet({ budgets, onClose, initialPerson, meId }: Props)
   const chip = (on: boolean) => `rounded-full px-4 py-2 text-sm font-medium ${on ? 'bg-white text-slate-900' : 'bg-surface-2'}`
 
   return (
-    <Sheet title="Të hyra të reja" onClose={onClose}>
+    <Sheet title={income ? 'Ndrysho të hyrën' : 'Të hyra të reja'} onClose={onClose}>
       <div className="flex flex-col gap-4 p-5">
         <div>
           <h3 className="mb-2 text-sm font-medium text-muted">Kush i dha?</h3>

@@ -2,14 +2,11 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import { existsSync, readFileSync } from 'node:fs'
 
-// HTTPS lokal për iPhone (npm run iphone): certifikata nga mkcert te certs/ (jashtë git-it)
-const cert = 'certs/iphone.pem'
-const key = 'certs/iphone-key.pem'
-const https = process.env.BUXHETI_HTTPS && existsSync(cert) && existsSync(key) ? { cert: readFileSync(cert), key: readFileSync(key) } : undefined
+const base = process.env.BASE_URL || '/'
 
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
@@ -23,8 +20,8 @@ export default defineConfig({
           description: 'Menaxho rrogën dhe buxhetet e shtëpisë, offline.',
           lang: 'sq',
           dir: 'ltr',
-          start_url: '/',
-          scope: '/',
+          start_url: base,
+          scope: base,
           display: 'standalone',
           orientation: 'portrait',
           background_color: '#0b0f17',
@@ -42,6 +39,5 @@ export default defineConfig({
         },
       }),
   ],
-  preview: { https },
   test: { environment: 'node', setupFiles: ['fake-indexeddb/auto'] },
 })

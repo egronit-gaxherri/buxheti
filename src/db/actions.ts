@@ -65,8 +65,31 @@ export async function undoExpense(expense: Expense): Promise<void> {
   })
 }
 
-export async function updateExpense(id: string, patch: Partial<Pick<Expense, 'categoryId' | 'note' | 'receipt' | 'description'>>) {
-  await db.expenses.update(id, patch)
+export async function updateExpense(
+  id: string,
+  patch: Partial<Pick<Expense, 'amount' | 'budgetId' | 'categoryId' | 'date' | 'note' | 'receipt' | 'description'>>,
+) {
+  if (patch.amount !== undefined && !(patch.amount > 0)) throw new Error('Shuma duhet të jetë më e madhe se 0')
+  const update: Partial<Expense> = { ...patch }
+  if (update.amount !== undefined) update.amount = Math.round(update.amount)
+  if (update.description !== undefined) update.description = update.description.trim()
+  if (update.date !== undefined) update.monthKey = monthKeyOf(update.date)
+  await db.transaction('rw', db.expenses, db.descriptions, async () => {
+    await db.expenses.update(id, update)
+    const cur = await db.expenses.get(id)
+    const text = cur ? normalize(cur.description) : ''
+    if (cur && text) {
+      const prev = await db.descriptions.get(text)
+      await db.descriptions.put({
+        text,
+        display: cur.description,
+        count: prev?.count ?? 1,
+        lastCategoryId: cur.categoryId,
+        lastBudgetId: cur.budgetId,
+        lastUsed: Date.now(),
+      })
+    }
+  })
 }
 
 export async function deleteExpense(id: string) {
@@ -109,6 +132,34 @@ export async function addIncome(input: NewIncome): Promise<Income> {
     .map((s) => ({ id: newId(), incomeId: income.id, budgetId: s.budgetId, monthKey, amount: s.amount }))
   await db.transaction('rw', db.incomes, db.incomeSplits, async () => {
     await db.incomes.add(income)
+    await db.incomeSplits.bulkAdd(splits)
+  })
+  return income
+}
+
+export async function updateIncome(id: string, input: NewIncome): Promise<Income> {
+  const total = input.splits.reduce((a, s) => a + s.amount, 0)
+  if (!(input.amount > 0)) throw new Error('Shuma duhet të jetë më e madhe se 0')
+  if (total !== input.amount) throw new Error('Ndarjet duhet të mbledhin saktësisht shumën e të hyrës')
+  const existing = await db.incomes.get(id)
+  if (!existing) throw new Error('E hyra nuk u gjet')
+  const date = input.date ?? existing.date
+  const monthKey = monthKeyOf(date)
+  const income: Income = {
+    ...existing,
+    monthKey,
+    personId: input.personId || undefined,
+    source: input.source.trim() || 'Të hyra',
+    note: input.note?.trim() || undefined,
+    amount: input.amount,
+    date,
+  }
+  const splits: IncomeSplit[] = input.splits
+    .filter((s) => s.amount > 0)
+    .map((s) => ({ id: newId(), incomeId: id, budgetId: s.budgetId, monthKey, amount: s.amount }))
+  await db.transaction('rw', db.incomes, db.incomeSplits, async () => {
+    await db.incomeSplits.where('incomeId').equals(id).delete()
+    await db.incomes.put(income)
     await db.incomeSplits.bulkAdd(splits)
   })
   return income
@@ -181,6 +232,20 @@ export async function addRecurring(input: NewRecurring): Promise<Recurring> {
   await db.recurring.add(r)
   await runRecurring()
   return r
+}
+
+export async function updateRecurring(id: string, input: NewRecurring): Promise<void> {
+  if (!(input.amount > 0)) throw new Error('Shuma duhet të jetë më e madhe se 0')
+  const description = input.description.trim()
+  if (!description) throw new Error('Shkruaj përshkrimin')
+  await db.recurring.update(id, {
+    budgetId: input.budgetId,
+    categoryId: input.categoryId,
+    amount: Math.round(input.amount),
+    description,
+    dayOfMonth: Math.min(31, Math.max(1, Math.round(input.dayOfMonth))),
+  })
+  await runRecurring()
 }
 
 export const setRecurringActive = (id: string, active: boolean) => db.recurring.update(id, { active })
@@ -346,6 +411,24 @@ export async function reopenMonth(monthKey: string): Promise<void> {
     }
     await db.months.put({ ...cur, closed: false, carried: {}, closedAt: undefined })
   })
+}
+
+/**
+ * Kur një muaj i mbyllur ndryshohet më pas, përditëson bartjen e buxheteve që ishin zgjedhur
+ * për bartje me mbetjen e tyre të re.
+ */
+export async function refreshClosedMonthCarry(monthKey: string): Promise<void> {
+  const cur = await db.months.get(monthKey)
+  if (!cur?.closed) return
+  const data = await loadMonthData(monthKey)
+  const carriedIds = Object.keys(cur.carried ?? {})
+  const nextCarry: Record<string, number> = {}
+  for (const b of data.budgets) {
+    const rem = summarizeBudget(data, b.id).remaining
+    const wasCarried = carriedIds.length > 0 ? carriedIds.includes(b.id) : rem > 0
+    if (wasCarried && rem !== 0) nextCarry[b.id] = rem
+  }
+  await closeMonth(monthKey, nextCarry)
 }
 
 /* ───────── Personat ───────── */

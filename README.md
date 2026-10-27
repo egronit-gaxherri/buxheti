@@ -1,11 +1,25 @@
 # Buxheti
 
 PWA për menaxhimin e rrogës dhe buxheteve — mobile-first, dark mode, gjithçka në shqip, punon offline
-dhe instalohet në ekranin kryesor të iPhone. Të dhënat qëndrojnë vetëm në pajisje (IndexedDB).
+dhe instalohet në ekranin kryesor të telefonit (iPhone / Android) nga kudo që je. Të dhënat qëndrojnë
+në pajisje (IndexedDB) dhe opsionalisht sinkronizohen për buxhetin **Shtëpi**.
 
 Stack: Vite · React 19 · TypeScript · Tailwind v4 · Dexie (IndexedDB) · vite-plugin-pwa (Workbox).
 
-## Komandat
+## Qasja në telefon nga kudo (Live HTTPS)
+
+Aplikacioni publikohet automatikisht me HTTPS përmes GitHub Pages te:
+- **https://egronit-gaxherri.github.io/buxheti/**
+
+Si ta instalosh në iPhone nga kudo që je (Wi-Fi ose 4G/5G):
+1. Hape **https://egronit-gaxherri.github.io/buxheti/** në **Safari** në iPhone.
+2. Shtyp butonin **Share** (katrori me shigjetë lart) → **Add to Home Screen** (Shto në ekranin kryesor).
+3. Hape gjithmonë nga ikona **Buxheti** në ekranin kryesor:
+   - Punon në ekran të plotë (standalone) dhe **100% offline** edhe pa internet.
+   - Ka certifikatë zyrtare HTTPS, ndaj **Face ID / Touch ID** dhe **Service Worker** funksionojnë menjëherë (pa pasur nevojë për Mac-un hapur apo certifikata manuale).
+   - Çdo `git push` në `main` e përditëson aplikacionin automatikisht në telefon.
+
+## Komandat lokale
 
 ```bash
 npm install
@@ -16,45 +30,15 @@ npm run preview    # build-i i prodhimit në http://localhost:5181 (me service w
 node scripts/gen-icons.mjs   # rigjeneron ikonat PNG
 ```
 
-## Instalimi në iPhone nga Mac-u (pa publikim)
-
-Aplikacioni shërbehet me HTTPS nga Mac-u në WiFi. Pas instalimit punon offline edhe kur Mac-u është i fikur;
-Mac-u duhet vetëm për instalimin dhe për përditësime.
-
-Një herë në Mac:
-```bash
-brew install mkcert
-mkdir -p certs && mkcert -cert-file certs/iphone.pem -key-file certs/iphone-key.pem "$(scutil --get LocalHostName).local" localhost 127.0.0.1
-```
-Nis serverin (edhe për çdo përditësim):
-```bash
-npm run iphone        # https://<emri-i-mac-ut>.local:5443
-```
-Në iPhone, një herë: instalo dhe beso certifikatën rrënjë të mkcert (`$(mkcert -CAROOT)/rootCA.pem` — **kurrë**
-`rootCA-key.pem`), hap adresën në Safari → Share → Add to Home Screen. Përdore vetëm nga ikona: të dhënat
-e ikonës janë të ndara nga ato të Safari-t. Emri i Mac-ut (`.local`) nuk duhet ndryshuar, se ndryshon adresa
-dhe aplikacioni nis bosh — mbaj backup.
-
-## Instalimi në iPhone me publikim
-
-Service worker-i (offline) dhe Face ID kërkojnë **HTTPS**. Një adresë `http://192.168.x.x` në WiFi
-hapet në iPhone, por pa offline dhe pa Face ID.
-
-1. `npm run build` dhe publiko dosjen `dist/` në çdo host statik me HTTPS
-   (Netlify, Vercel, Cloudflare Pages, GitHub Pages).
-2. Hape adresën në **Safari** në iPhone → butoni Share → **Add to Home Screen**.
-3. Hape nga ikona: aplikacioni del në ekran të plotë dhe punon edhe pa internet.
-
 ## Sinkronizimi me familjen (Supabase)
 
 Opsional. Buxheti **Shtëpi** ndahet me familjarët: secili shton shpenzime nga telefoni i vet dhe të gjithë
 shohin të njëjtën mbetje. **Personal, borxhet, limitet dhe fotot e faturave nuk largohen kurrë nga telefoni.**
 
-- Konfigurimi: kopjo `.env.example` te `.env.local` (URL + publishable key i projektit) dhe ndërto sërish.
-  Pa këto, aplikacioni punon plotësisht offline dhe ekrani "Familja" thjesht e tregon këtë.
+- Konfigurimi lokal: kopjo `.env.example` te `.env.local` (URL + publishable key i projektit).
+- Konfigurimi në GitHub Pages: variablat `VITE_SUPABASE_URL` dhe `VITE_SUPABASE_PUBLISHABLE_KEY` janë të vendosura në GitHub Actions Variables, bashkë me workflow-n `supabase-keepalive.yml` që e mban projektin aktiv çdo 3 ditë.
 - Skema e serverit: `supabase/migrations/` (aplikuar te projekti `buxheti`, eu-central-1).
-- Në aplikacion: **Më shumë → Familja & sinkronizimi** → "Krijo familjen" në telefonin e parë,
-  pastaj "Bashkohu me kod" në të tjerët.
+- Në aplikacion: **Më shumë → Familja & sinkronizimi** (ose prek treguesin e familjes në krye të Ballinës) → "Krijo familjen" në telefonin e parë, pastaj "Bashkohu me kod" në të tjerët.
 
 Si funksionon:
 - Pa llogari/email. Çdo pajisje merr një **token sekret** kur krijon familjen ose bashkohet me kodin e ftesës;
@@ -108,8 +92,7 @@ Si funksionon:
 
 ## Kufizime të njohura
 
-- Kur një muaj i mbyllur ndryshohet, bartja nuk përditësohet vetë: hape dhe mbylle sërish
-  (aplikacioni e tregon këtë me një shirit në krye).
+- Kur një muaj i mbyllur ndryshohet, aplikacioni e dallon ndryshimin dhe shfaq butonin **"Përditëso bartjen"** në krye të muajit për ta përditësuar me një prekje.
 - Shpenzimet e përsëritura shtohen kur hapet aplikacioni (PWA-të në iOS nuk kanë punë në sfond).
 - Ndryshimet nga familja vijnë brenda ~30 s (ose menjëherë me "Sinkronizo tani"); s'ka njoftime push.
 - Bartja e muajit sinkronizohet, por mbyllja e muajit (shiriti "i mbyllur") është për çdo telefon veç.
