@@ -1,6 +1,7 @@
-export type MoreView = 'goals' | 'family' | 'people' | 'debts' | 'moves' | 'recurring' | 'limits' | 'archive' | 'security'
+export type MoreView = 'customize' | 'goals' | 'family' | 'people' | 'debts' | 'moves' | 'recurring' | 'limits' | 'archive' | 'security'
 
 const ITEMS: { id: MoreView; icon: string; title: string; hint: string }[] = [
+  { id: 'customize', icon: '🏷️', title: 'Buxhetet & kategoritë', hint: 'Zarfet, ngjyrat, kategoritë dhe fjalët kyçe' },
   { id: 'goals', icon: '🎯', title: 'Qëllimet e kursimit', hint: 'Pushime, makinë, fond emergjence — me progres' },
   { id: 'family', icon: '🏡', title: 'Familja & sinkronizimi', hint: 'Ndaj Shtëpinë me familjarët në telefonat e tyre' },
   { id: 'people', icon: '👥', title: 'Personat', hint: 'Kush jep para për shtëpi dhe sa gjithsej' },
@@ -13,6 +14,7 @@ const ITEMS: { id: MoreView; icon: string; title: string; hint: string }[] = [
 ]
 
 export const MORE_TITLES: Record<MoreView, string> = {
+  customize: 'Buxhetet & kategoritë',
   goals: 'Qëllimet',
   family: 'Familja',
   people: 'Personat',

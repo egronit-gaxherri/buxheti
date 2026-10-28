@@ -3,9 +3,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createPinRecord, isValidPin, lockoutMs, verifyPin } from './pin'
+import { createPinRecord, isValidPin, lockoutMs, OWNER_PIN, verifyPin } from './pin'
 import { encodeWinAnsi, buildPdf } from './pdf'
-import { monthCsv } from './csv'
+import { allMonthsCsv, monthCsv } from './csv'
 import { monthReportPdf } from './report'
 import { yearTrend, monthTotals } from './archive'
 import { exportBackup, importBackup, validateBackup } from './backup'
@@ -28,6 +28,8 @@ describe('PIN', () => {
     expect(await verifyPin('4822', rec)).toBe(false)
     const rec2 = await createPinRecord('4821')
     expect(rec2.salt).not.toBe(rec.salt) // kripë e re çdo herë
+    expect(await verifyPin('281026', OWNER_PIN)).toBe(true)
+    expect(await verifyPin('000000', OWNER_PIN)).toBe(false)
   })
   it('validimi dhe bllokimi', async () => {
     expect([isValidPin('123'), isValidPin('1234'), isValidPin('123456'), isValidPin('12a4')]).toEqual([false, true, true, false])
@@ -61,6 +63,7 @@ describe('CSV', () => {
     expect(lines[3]).toBe(`02.10.2026;Shpenzim;Shtëpi;Ushqim;'=SUM(A1);-3,00;"me ""thonjëza""; dhe pikëpresje"`)
     expect(lines[4]).toBe('03.10.2026;Transferim;Personal → Shtëpi;;;20,00;')
     expect(lines[5]).toBe('04.10.2026;Korrigjim;Shtëpi;;;-4,50;Korrigjim')
+    expect(allMonthsCsv({ incomes, incomeSplits: sample().incomeSplits, expenses: sample().expenses, transfers: sample().transfers, adjustments: sample().adjustments }, sample().budgets, cats)).toBe(csv)
   })
 })
 

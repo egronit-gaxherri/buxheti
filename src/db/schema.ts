@@ -193,6 +193,7 @@ export interface DescriptionStat {
   count: number
   lastCategoryId: string
   lastBudgetId: string
+  lastAmount?: number
   lastUsed: number
 }
 

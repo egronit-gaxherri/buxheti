@@ -1,4 +1,4 @@
-import type { Budget, Category, Income } from '../db/schema'
+import type { Adjustment, Budget, Category, Expense, Income, IncomeSplit, Transfer } from '../db/schema'
 import type { MonthData } from './calc'
 import { formatDateSQ } from './dates'
 
@@ -17,14 +17,29 @@ function text(s: string): string {
  * Ndarës ";" dhe presje dhjetore, me BOM — hapet drejt në Excel me gjuhë evropiane.
  */
 export function monthCsv(d: MonthData, incomes: Income[], budgets: Budget[], categories: Category[]): string {
+  return allMonthsCsv(
+    { incomes, incomeSplits: d.incomeSplits, expenses: d.expenses, transfers: d.transfers, adjustments: d.adjustments },
+    budgets,
+    categories,
+    d.monthKey,
+  )
+}
+
+/** CSV për të gjithë historikun (ose për një muaj të dhënë). */
+export function allMonthsCsv(
+  d: { incomes: Income[]; incomeSplits: IncomeSplit[]; expenses: Expense[]; transfers: Transfer[]; adjustments: Adjustment[] },
+  budgets: Budget[],
+  categories: Category[],
+  fallbackMonthKey = '',
+): string {
   const bud = (id: string) => budgets.find((b) => b.id === id)?.name ?? '?'
   const cat = (id: string) => categories.find((c) => c.id === id)?.name ?? ''
   type Row = { date: string; order: number; cells: string[] }
   const rows: Row[] = []
 
   for (const s of d.incomeSplits) {
-    const inc = incomes.find((i) => i.id === s.incomeId)
-    rows.push({ date: inc?.date ?? `${d.monthKey}-01`, order: 0, cells: ['Të hyra', text(bud(s.budgetId)), '', text(inc?.source ?? ''), num(s.amount), ''] })
+    const inc = d.incomes.find((i) => i.id === s.incomeId)
+    rows.push({ date: inc?.date ?? `${s.monthKey || fallbackMonthKey}-01`, order: 0, cells: ['Të hyra', text(bud(s.budgetId)), '', text(inc?.source ?? ''), num(s.amount), ''] })
   }
   for (const e of d.expenses)
     rows.push({ date: e.date, order: 1, cells: ['Shpenzim', text(bud(e.budgetId)), text(cat(e.categoryId)), text(e.description), num(-e.amount), text(e.note ?? '')] })
@@ -35,5 +50,5 @@ export function monthCsv(d: MonthData, incomes: Income[], budgets: Budget[], cat
 
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order)
   const header = ['Data', 'Lloji', 'Buxheti', 'Kategoria', 'Përshkrimi', 'Shuma (€)', 'Shënim']
-  return '﻿' + [header.join(';'), ...rows.map((r) => [formatDateSQ(r.date), ...r.cells].join(';'))].join('\r\n') + '\r\n'
+  return '\ufeff' + [header.join(';'), ...rows.map((r) => [formatDateSQ(r.date), ...r.cells].join(';'))].join('\r\n') + '\r\n'
 }

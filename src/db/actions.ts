@@ -1,10 +1,10 @@
 import { db, newId, PERSON_COLORS } from './db'
-import type { Debt, DebtDirection, DebtPayment, Expense, Goal, GoalAuto, GoalContribution, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
+import type { Budget, Category, Debt, DebtDirection, DebtPayment, Expense, Goal, GoalAuto, GoalContribution, Income, IncomeSplit, Person, Recurring, Transfer } from './schema'
 import { leftOf as leftOfGoal, savedOf } from '../lib/goals'
 import { budgetEffect, remainingOf } from '../lib/debts'
 import { formatEUR } from '../lib/money'
 import { monthKeyOf, parseDate, shiftMonth, todayStr } from '../lib/dates'
-import { normalize } from '../lib/categorize'
+import { FALLBACK_CATEGORY_NAME, normalize } from '../lib/categorize'
 import { pendingDates } from '../lib/recurring'
 import { summarizeBudget } from '../lib/calc'
 import { loadMonthData } from './queries'
@@ -45,6 +45,7 @@ export async function addExpense(input: NewExpense): Promise<Expense> {
         count: (prev?.count ?? 0) + 1,
         lastCategoryId: expense.categoryId,
         lastBudgetId: expense.budgetId,
+        lastAmount: expense.amount,
         lastUsed: Date.now(),
       })
     }
@@ -86,6 +87,7 @@ export async function updateExpense(
         count: prev?.count ?? 1,
         lastCategoryId: cur.categoryId,
         lastBudgetId: cur.budgetId,
+        lastAmount: cur.amount,
         lastUsed: Date.now(),
       })
     }
@@ -678,4 +680,80 @@ export async function runGoalAutoSave(today: string = todayStr()): Promise<numbe
     }
   }
   return made
+}
+
+/* ───────── Buxhetet & Kategoritë ───────── */
+
+export async function addBudget(input: { name: string; color: string }): Promise<Budget> {
+  const name = input.name.trim()
+  if (!name) throw new Error('Shkruaj emrin e buxhetit')
+  const all = await db.budgets.orderBy('order').toArray()
+  if (all.some((b) => normalize(b.name) === normalize(name))) throw new Error('Ekziston tashmë një buxhet me këtë emër')
+  const order = all.length ? Math.max(...all.map((b) => b.order)) + 1 : 0
+  const b: Budget = { id: newId(), name, color: input.color || '#38bdf8', order }
+  await db.budgets.add(b)
+  return b
+}
+
+export async function updateBudget(id: string, patch: { name?: string; color?: string }): Promise<void> {
+  const update: Partial<Budget> = {}
+  if (patch.name !== undefined) {
+    const n = patch.name.trim()
+    if (!n) throw new Error('Shkruaj emrin e buxhetit')
+    update.name = n
+  }
+  if (patch.color !== undefined) update.color = patch.color
+  await db.budgets.update(id, update)
+}
+
+export async function deleteBudget(id: string): Promise<void> {
+  if ((await db.budgets.count()) <= 1) throw new Error('Duhet të mbetet të paktën një buxhet')
+  const [exp, spl, trn, adj, rec] = await Promise.all([
+    db.expenses.where('budgetId').equals(id).count(),
+    db.incomeSplits.where('budgetId').equals(id).count(),
+    db.transfers.filter((t) => t.fromBudgetId === id || t.toBudgetId === id).count(),
+    db.adjustments.where('budgetId').equals(id).count(),
+    db.recurring.filter((r) => r.budgetId === id).count(),
+  ])
+  if (exp + spl + trn + adj + rec > 0) throw new Error('Ky buxhet ka lëvizje të regjistruara dhe nuk mund të fshihet')
+  await db.budgets.delete(id)
+}
+
+export function parseKeywords(raw: string): string[] {
+  return [...new Set(raw.split(/[,;]+/).map((s) => normalize(s)).filter(Boolean))]
+}
+
+export async function addCategory(input: { name: string; icon: string; keywords: string[] }): Promise<Category> {
+  const name = input.name.trim()
+  if (!name) throw new Error('Shkruaj emrin e kategorisë')
+  const all = await db.categories.toArray()
+  if (all.some((c) => normalize(c.name) === normalize(name))) throw new Error('Ekziston tashmë një kategori me këtë emër')
+  const c: Category = { id: newId(), name, icon: input.icon.trim() || '📦', keywords: input.keywords.map(normalize).filter(Boolean) }
+  await db.categories.add(c)
+  return c
+}
+
+export async function updateCategory(id: string, patch: { name?: string; icon?: string; keywords?: string[] }): Promise<void> {
+  const update: Partial<Category> = {}
+  if (patch.name !== undefined) {
+    const n = patch.name.trim()
+    if (!n) throw new Error('Shkruaj emrin e kategorisë')
+    update.name = n
+  }
+  if (patch.icon !== undefined) update.icon = patch.icon.trim() || '📦'
+  if (patch.keywords !== undefined) update.keywords = patch.keywords.map(normalize).filter(Boolean)
+  await db.categories.update(id, update)
+}
+
+export async function deleteCategory(id: string): Promise<void> {
+  const all = await db.categories.toArray()
+  if (all.length <= 1) throw new Error('Duhet të mbetet të paktën një kategori')
+  const fallback = all.find((c) => c.id !== id && c.name === FALLBACK_CATEGORY_NAME) ?? all.find((c) => c.id !== id)!
+  await db.transaction('rw', [db.categories, db.expenses, db.recurring, db.descriptions, db.limits], async () => {
+    await db.expenses.where('categoryId').equals(id).modify({ categoryId: fallback.id })
+    await db.recurring.filter((r) => r.categoryId === id).modify({ categoryId: fallback.id })
+    await db.descriptions.filter((d) => d.lastCategoryId === id).modify({ lastCategoryId: fallback.id })
+    await db.limits.delete(id)
+    await db.categories.delete(id)
+  })
 }

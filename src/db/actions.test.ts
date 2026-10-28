@@ -90,7 +90,7 @@ describe('mbulim dhe limite', () => {
   })
 })
 
-import { importExpenses, reconcileBalances, undoExpenses } from './actions'
+import { addBudget, addCategory, deleteBudget, deleteCategory, importExpenses, parseKeywords, reconcileBalances, undoExpenses, updateBudget, updateCategory } from './actions'
 
 describe('import dhe përshtatje bilanci', () => {
   it('importi është atomik dhe zhbëhet', async () => {
@@ -129,5 +129,27 @@ describe('import dhe përshtatje bilanci', () => {
     // mode 'untracked' me diferencë pozitive bëhet korrigjim
     await reconcileBalances([{ budgetId: h.id, actual: 9500, mode: 'untracked' }], 'x', '2026-10-05')
     expect(await db.adjustments.count()).toBe(1)
+  })
+  it('menaxhon buxhetet dhe kategoritë me mbrojtje të referencave', async () => {
+    const b = await addBudget({ name: 'Kursime', color: '#4ade80' })
+    expect(b.name).toBe('Kursime')
+    await expect(addBudget({ name: 'kursime', color: '#000' })).rejects.toThrow('Ekziston tashmë')
+    await updateBudget(b.id, { name: 'Investime', color: '#facc15' })
+    expect((await db.budgets.get(b.id))?.name).toBe('Investime')
+
+    // buxhet me shpenzime nuk fshihet
+    await addExpense({ amount: 500, description: 'Libër', budgetId: b.id, categoryId: 'x', date: '2026-10-02' })
+    await expect(deleteBudget(b.id)).rejects.toThrow('ka lëvizje')
+    await db.expenses.clear()
+    await deleteBudget(b.id)
+    expect(await db.budgets.get(b.id)).toBeUndefined()
+
+    const c = await addCategory({ name: 'Arsim', icon: '📚', keywords: parseKeywords('Libër, Shkollë') })
+    expect(c.keywords).toEqual(['liber', 'shkolle'])
+    await updateCategory(c.id, { name: 'Edukimi', keywords: ['kurs'] })
+    await addExpense({ amount: 1000, description: 'Kurs', budgetId: (await db.budgets.toArray())[0].id, categoryId: c.id, date: '2026-10-02' })
+    await deleteCategory(c.id)
+    const fallback = (await db.categories.toArray()).find((x) => x.name === 'Tjetër')!
+    expect((await db.expenses.toArray())[0].categoryId).toBe(fallback.id)
   })
 })

@@ -1,31 +1,36 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { PinPad } from './PinPad'
 import { getSetting, KEYS, setSetting, useSetting, type PinFails } from '../db/settings'
-import { lockoutMs, verifyPin, type PinRecord } from '../lib/pin'
+import { lockoutMs, OWNER_PIN, verifyPin, type PinRecord } from '../lib/pin'
 import { verifyBiometric } from '../lib/webauthn'
 
 /** Kyçet sërish pasi aplikacioni ka qëndruar në sfond më shumë se kaq. */
 export const LOCK_AFTER_MS = 30_000
 
+let triggerLock: (() => void) | null = null
+
+/** Kyç aplikacionin menjëherë (p.sh. nga butoni 🔒 në Ballinë). */
+export function lockNow() {
+  triggerLock?.()
+}
+
 /**
- * Mban aplikacionin të fshehur derisa të futet PIN-i ose Face ID.
- * Aplikacioni mbetet i montuar (ruhet gjendja), por me display:none.
+ * Mban aplikacionin të fshehur derisa të futet PIN-i i pronarit ose Face ID.
+ * Edhe në hapjen e parë në çdo pajisje të re kërkohet kodi i pronarit (`OWNER_PIN`),
+ * kështu që askush i huaj që hap linkun nuk mund të hyjë.
  */
 export function LockGate({ children }: { children: ReactNode }) {
   const pin = useSetting<PinRecord>(KEYS.pin)
   const bio = useSetting<{ credentialId: string }>(KEYS.biometric)
-  const [locked, setLocked] = useState<boolean | null>(null)
+  const [locked, setLocked] = useState(true)
   const [cover, setCover] = useState(false)
-  const first = useRef(true)
 
-  // Në hapje: i kyçur vetëm nëse ka PIN. Një PIN i vendosur gjatë seancës nuk e kyç menjëherë.
   useEffect(() => {
-    if (pin === undefined) return
-    if (first.current) {
-      first.current = false
-      setLocked(!!pin)
-    } else if (!pin) setLocked(false)
-  }, [pin])
+    triggerLock = () => setLocked(true)
+    return () => {
+      triggerLock = null
+    }
+  }, [])
 
   useEffect(() => {
     let hiddenAt = 0
@@ -35,28 +40,49 @@ export function LockGate({ children }: { children: ReactNode }) {
         setCover(true) // fsheh shumat nga pamja e "app switcher"
       } else {
         setCover(false)
-        if (hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) setLocked((l) => (l === null ? l : true))
+        if (hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) setLocked(true)
       }
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
-  if (pin === undefined || bio === undefined || locked === null) return null
-  const showLock = !!pin && locked
+  if (pin === undefined || bio === undefined) return null
+  const activePin = pin ?? OWNER_PIN
+  const isFirstVisit = pin === null
 
   return (
     <>
-      <div className="h-full" style={{ display: showLock ? 'none' : undefined }} aria-hidden={showLock}>
+      <div className="h-full" style={{ display: locked ? 'none' : undefined }} aria-hidden={locked}>
         {children}
       </div>
-      {showLock && <LockScreen pin={pin!} bio={bio} onUnlock={() => setLocked(false)} />}
-      {cover && !!pin && !showLock && <div className="fixed inset-0 z-[90] bg-bg" />}
+      {locked && (
+        <LockScreen
+          pin={activePin}
+          bio={bio}
+          isFirstVisit={isFirstVisit}
+          onUnlock={async () => {
+            if (isFirstVisit) await setSetting(KEYS.pin, OWNER_PIN)
+            setLocked(false)
+          }}
+        />
+      )}
+      {cover && !locked && <div className="fixed inset-0 z-[90] bg-bg" />}
     </>
   )
 }
 
-function LockScreen({ pin, bio, onUnlock }: { pin: PinRecord; bio: { credentialId: string } | null; onUnlock: () => void }) {
+function LockScreen({
+  pin,
+  bio,
+  isFirstVisit,
+  onUnlock,
+}: {
+  pin: PinRecord
+  bio: { credentialId: string } | null
+  isFirstVisit: boolean
+  onUnlock: () => void | Promise<void>
+}) {
   const [error, setError] = useState('')
   const [reset, setReset] = useState(0)
   const [lockedUntil, setLockedUntil] = useState(0)
@@ -108,8 +134,9 @@ function LockScreen({ pin, bio, onUnlock }: { pin: PinRecord; bio: { credentialI
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-bg px-6" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="text-center">
         <div className="text-2xl font-semibold">Buxheti</div>
+        {isFirstVisit && <div className="mt-1 text-xs font-medium text-sky-300">🔒 Qasje private · Vetëm për pronarin</div>}
         <div className="mt-1 text-muted" role="status">
-          {blocked ? `Provo përsëri pas ${waitS} s` : error || 'Fut PIN-in'}
+          {blocked ? `Provo përsëri pas ${waitS} s` : error || (isFirstVisit ? 'Fut kodin e pronarit për të aktivizuar pajisjen' : 'Fut PIN-in')}
         </div>
       </div>
       <PinPad

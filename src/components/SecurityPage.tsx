@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { PinPad } from './PinPad'
+import { lockNow } from './LockGate'
 import { db } from '../db/db'
 import { deleteSetting, KEYS, setSetting, useSetting } from '../db/settings'
 import { loadMonthData } from '../db/queries'
 import type { Budget, Category } from '../db/schema'
-import { createPinRecord, verifyPin, type PinRecord } from '../lib/pin'
+import { createPinRecord, OWNER_PIN, verifyPin, type PinRecord } from '../lib/pin'
 import { biometricAvailable, registerBiometric } from '../lib/webauthn'
 import { exportBackup, importBackup } from '../lib/backup'
-import { monthCsv } from '../lib/csv'
+import { allMonthsCsv, monthCsv } from '../lib/csv'
 import { monthReportPdf } from '../lib/report'
 import { saveFile } from '../lib/saveFile'
 import { formatDateSQ, formatMonthSQ, todayStr } from '../lib/dates'
 
-type PinFlow = null | { step: 'verify'; then: 'change' | 'remove' } | { step: 'new' } | { step: 'confirm'; first: string }
+type PinFlow = null | { step: 'verify' } | { step: 'new' } | { step: 'confirm'; first: string }
 
 interface Props {
   monthKey: string
@@ -35,19 +36,14 @@ export function SecurityPage({ monthKey, budgets, categories }: Props) {
   }, [])
 
   const say = (text: string, ok = true) => setMsg({ text, ok })
+  const activePin = pin ?? OWNER_PIN
 
   async function onPin(p: string) {
     if (!flow) return
     if (flow.step === 'verify') {
-      if (!pin || !(await verifyPin(p, pin))) {
+      if (!(await verifyPin(p, activePin))) {
         setReset((r) => r + 1)
         return say('PIN-i aktual është i gabuar', false)
-      }
-      if (flow.then === 'remove') {
-        await deleteSetting(KEYS.pin)
-        await deleteSetting(KEYS.biometric)
-        setFlow(null)
-        return say('PIN-i dhe Face ID u hoqën')
       }
       setMsg(null)
       return setFlow({ step: 'new' })
@@ -64,7 +60,7 @@ export function SecurityPage({ monthKey, budgets, categories }: Props) {
     await setSetting(KEYS.pin, await createPinRecord(p))
     await setSetting(KEYS.pinFails, { count: 0, lockedUntil: 0 })
     setFlow(null)
-    say('PIN-i u ruajt. Aplikacioni do të kyçet në hapjen e radhës.')
+    say('PIN-i i ri u ruajt.')
   }
 
   async function enableBio() {
@@ -95,7 +91,21 @@ export function SecurityPage({ monthKey, budgets, categories }: Props) {
     }
   }
 
-  async function doExport(kind: 'csv' | 'pdf') {
+  async function doExport(kind: 'csv' | 'pdf' | 'all-csv') {
+    if (kind === 'all-csv') {
+      const [incomes, splits, expenses, transfers, adjustments] = await Promise.all([
+        db.incomes.toArray(),
+        db.incomeSplits.toArray(),
+        db.expenses.toArray(),
+        db.transfers.toArray(),
+        db.adjustments.toArray(),
+      ])
+      await saveFile(
+        new Blob([allMonthsCsv({ incomes, incomeSplits: splits, expenses, transfers, adjustments }, budgets, categories)], { type: 'text/csv;charset=utf-8' }),
+        `buxheti-gjithsej-${todayStr()}.csv`,
+      )
+      return
+    }
     const [data, incomes] = await Promise.all([loadMonthData(monthKey), db.incomes.where('monthKey').equals(monthKey).toArray()])
     const name = `buxheti-${monthKey}.${kind}`
     if (kind === 'csv') await saveFile(new Blob([monthCsv(data, incomes, budgets, categories)], { type: 'text/csv;charset=utf-8' }), name)
@@ -113,7 +123,7 @@ export function SecurityPage({ monthKey, budgets, categories }: Props) {
         {msg && <p className={`text-sm ${msg.ok ? 'text-ok' : 'text-danger'}`} role="status">{msg.text}</p>}
         <PinPad
           key={flow.step}
-          length={flow.step === 'verify' ? pin?.length : flow.step === 'confirm' ? flow.first.length : undefined}
+          length={flow.step === 'verify' ? activePin.length : flow.step === 'confirm' ? flow.first.length : undefined}
           resetKey={reset}
           onComplete={onPin}
         />
@@ -129,28 +139,21 @@ export function SecurityPage({ monthKey, budgets, categories }: Props) {
       {msg && <p className={`rounded-2xl p-3 text-sm ${msg.ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-red-500/10 text-red-300'}`} role="status">{msg.text}</p>}
 
       <section className="space-y-2">
-        <h2 className="px-1 text-sm font-medium uppercase tracking-wide text-muted">Kyçja</h2>
-        {!pin ? (
-          <button onClick={() => setFlow({ step: 'new' })} className={row}>🔐 Vendos PIN <span className="text-muted">›</span></button>
+        <h2 className="px-1 text-sm font-medium uppercase tracking-wide text-muted">Kyçja & Autorizimi</h2>
+        <button onClick={() => setFlow({ step: 'verify' })} className={row}>🔐 Ndrysho PIN-in <span className="text-muted">›</span></button>
+        {bio ? (
+          <button onClick={() => deleteSetting(KEYS.biometric).then(() => say('Face ID u çaktivizua'))} className={row}>
+            🙂 Face ID: aktiv <span className="text-sm text-muted">Çaktivizo</span>
+          </button>
         ) : (
-          <>
-            <button onClick={() => setFlow({ step: 'verify', then: 'change' })} className={row}>🔐 Ndrysho PIN-in <span className="text-muted">›</span></button>
-            {bio ? (
-              <button onClick={() => deleteSetting(KEYS.biometric).then(() => say('Face ID u çaktivizua'))} className={row}>
-                🙂 Face ID: aktiv <span className="text-sm text-muted">Çaktivizo</span>
-              </button>
-            ) : (
-              <button onClick={enableBio} disabled={!bioOk} className={row}>
-                🙂 Aktivizo Face ID <span className="text-muted">›</span>
-              </button>
-            )}
-            {bioOk === false && !bio && <p className="px-1 text-xs text-muted">Face ID / Touch ID nuk është i disponueshëm këtu (kërkon HTTPS dhe pajisje me biometri).</p>}
-            <button onClick={() => setFlow({ step: 'verify', then: 'remove' })} className={`${row} text-red-300`}>Hiq PIN-in</button>
-          </>
+          <button onClick={enableBio} disabled={!bioOk} className={row}>
+            🙂 Aktivizo Face ID <span className="text-muted">›</span>
+          </button>
         )}
+        {bioOk === false && !bio && <p className="px-1 text-xs text-muted">Face ID / Touch ID nuk është i disponueshëm këtu (kërkon HTTPS dhe pajisje me biometri).</p>}
+        <button onClick={lockNow} className={row}>🔒 Kyçe aplikacionin tani <span className="text-muted">›</span></button>
         <p className="px-1 text-xs text-muted">
-          Aplikacioni kyçet në hapje dhe pas {30} sekondash në sfond. Nëse e harron PIN-in, e vetmja rrugëdalje është fshirja e të dhënave të aplikacionit — mbaj backup.
-          Kyçja e mbron aplikacionin nga sytë e të tjerëve; të dhënat në telefon nuk enkriptohen veçmas.
+          Aplikacioni është privat: kërkon PIN ose Face ID në çdo hapje, në çdo pajisje të re, dhe pas {30} sekondash në sfond.
         </p>
       </section>
 
@@ -177,10 +180,11 @@ export function SecurityPage({ monthKey, budgets, categories }: Props) {
       <section className="space-y-2">
         <h2 className="px-1 text-sm font-medium uppercase tracking-wide text-muted">Eksport · {formatMonthSQ(monthKey)}</h2>
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => doExport('csv')} className="h-14 rounded-2xl bg-surface font-medium active:bg-surface-2">📊 CSV</button>
-          <button onClick={() => doExport('pdf')} className="h-14 rounded-2xl bg-surface font-medium active:bg-surface-2">📄 PDF</button>
+          <button onClick={() => doExport('csv')} className="h-14 rounded-2xl bg-surface font-medium active:bg-surface-2">📊 CSV ({formatMonthSQ(monthKey)})</button>
+          <button onClick={() => doExport('pdf')} className="h-14 rounded-2xl bg-surface font-medium active:bg-surface-2">📄 PDF ({formatMonthSQ(monthKey)})</button>
         </div>
-        <p className="px-1 text-xs text-muted">Për një muaj tjetër, ndrysho muajin lart me ‹ ›.</p>
+        <button onClick={() => doExport('all-csv')} className={row}>🗂️ Eksporto të gjithë muajt (CSV) <span className="text-muted">›</span></button>
+        <p className="px-1 text-xs text-muted">Për raportin e një muaji tjetër, ndrysho muajin lart me ‹ ›.</p>
       </section>
     </div>
   )

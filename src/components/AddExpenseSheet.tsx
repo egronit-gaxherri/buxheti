@@ -94,10 +94,16 @@ export function AddExpenseSheet({ budgets, categories, onClose, onSaved }: Props
               {suggestions.map((s) => (
                 <button
                   key={s.text}
-                  onClick={() => setDesc(s.display)} /* kategoria vjen nga historiku */
+                  onClick={() => {
+                    setDesc(s.display) // kategoria vjen nga historiku
+                    if (!amount && s.lastAmount) {
+                      setAmount((s.lastAmount / 100).toFixed(2).replace('.', ',').replace(',00', ''))
+                    }
+                  }}
                   className="shrink-0 rounded-full border border-line px-3 py-1.5 text-sm text-white/90 active:bg-surface-2"
                 >
                   {s.display}
+                  {s.lastAmount ? <span className="ml-1 text-xs text-muted">· {formatEUR(s.lastAmount)}</span> : null}
                 </button>
               ))}
             </div>

@@ -20,6 +20,8 @@ import { MORE_TITLES, MorePage, type MoreView } from './components/MorePage'
 import { ArchivePage } from './components/ArchivePage'
 import { CloseMonthSheet } from './components/CloseMonthSheet'
 import { SecurityPage } from './components/SecurityPage'
+import { CustomizePage } from './components/CustomizePage'
+import { lockNow } from './components/LockGate'
 import { PeoplePage } from './components/PeoplePage'
 import { ContributorsCard } from './components/ContributorsCard'
 import { DebtsPage, dueText } from './components/DebtsPage'
@@ -31,12 +33,14 @@ import { GoalCard, GoalsPage } from './components/GoalsPage'
 import { GoalDetailSheet, GoalEditSheet } from './components/GoalSheets'
 import { InsightsSection } from './components/InsightsSection'
 import { startSyncLoop, useSyncStatus } from './sync/controller'
-import { useSetting } from './db/settings'
+import { KEYS, setSetting, useSetting } from './db/settings'
 import type { SyncConfig } from './sync/types'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db/db'
-import { currentMonthKey, formatMonthSQ, shiftMonth, todayStr } from './lib/dates'
+import { currentMonthKey, formatMonthSQ, parseDate, shiftMonth, todayStr } from './lib/dates'
 import { formatEUR } from './lib/money'
+import { exportBackup } from './lib/backup'
+import { saveFile } from './lib/saveFile'
 import { forecastBudget, limitCrossing, limitLevel, upcomingRecurring } from './lib/stats'
 
 type Tab = 'home' | 'expenses' | 'stats' | 'more'
@@ -85,6 +89,8 @@ export default function App() {
 
   const expireToast = useCallback(() => setToast(null), [])
   const syncCfg = useSetting<SyncConfig>('sync')
+  const lastBackup = useSetting<string>(KEYS.lastBackup)
+  const [backupDismissed, setBackupDismissed] = useState(false)
   const syncStatus = useSyncStatus()
 
   // Sinkronizimi me familjen në sfond (vetëm kur kjo pajisje është në një familje)
@@ -178,6 +184,14 @@ export default function App() {
     : syncStatus.offline ? 'bg-amber-400'
     : syncStatus.state === 'syncing' ? 'bg-sky-400 animate-pulse'
     : 'bg-emerald-400'
+  const daysSinceBackup = lastBackup ? Math.round((parseDate(today).getTime() - parseDate(lastBackup).getTime()) / 86_400_000) : Infinity
+  const showBackupHint = isCurrent && !backupDismissed && lastBackup !== undefined && data.expenses.length >= 5 && daysSinceBackup >= 14
+
+  async function quickBackup() {
+    const file = await exportBackup()
+    await saveFile(new Blob([JSON.stringify(file)], { type: 'application/json' }), `buxheti-backup-${today}.json`)
+    await setSetting(KEYS.lastBackup, today)
+  }
 
   return (
     <div className="mx-auto flex h-full max-w-md flex-col">
@@ -201,7 +215,12 @@ export default function App() {
             </button>
           )}
         </div>
-        <button onClick={() => setMonthKey(shiftMonth(monthKey, 1))} disabled={isCurrent} className="grid size-10 place-items-center rounded-full bg-surface text-lg disabled:opacity-30" aria-label="Muaji tjetër">›</button>
+        <div className="flex items-center gap-1.5">
+          <button onClick={lockNow} className="grid size-10 place-items-center rounded-full bg-surface text-sm" aria-label="Kyçe aplikacionin" title="Kyçe aplikacionin">
+            🔒
+          </button>
+          <button onClick={() => setMonthKey(shiftMonth(monthKey, 1))} disabled={isCurrent} className="grid size-10 place-items-center rounded-full bg-surface text-lg disabled:opacity-30" aria-label="Muaji tjetër">›</button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 pb-32">
@@ -235,6 +254,17 @@ export default function App() {
               <div className="flex items-center gap-3 rounded-2xl bg-sky-500/10 p-4 text-sm">
                 <span className="flex-1 text-sky-200">{formatMonthSQ(prevKey)} nuk është mbyllur ende. Mbylle për të parë përmbledhjen dhe për të bartur mbetjen.</span>
                 <button onClick={() => setClosing(prevKey)} className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-900">Mbylle</button>
+              </div>
+            )}
+            {showBackupHint && (
+              <div className="flex items-center gap-3 rounded-2xl bg-surface p-4 text-sm">
+                <span className="flex-1 text-muted">
+                  💾 {lastBackup ? `Kanë kaluar ${daysSinceBackup} ditë nga backup-i i fundit.` : 'Ende s’ke ruajtur një backup të të dhënave.'}
+                </span>
+                <button onClick={quickBackup} className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-900">
+                  Ruaj backup
+                </button>
+                <button onClick={() => setBackupDismissed(true)} aria-label="Mbyll kujtesën" className="px-1 text-muted">✕</button>
               </div>
             )}
             {overLimits.length > 0 && (
@@ -302,6 +332,7 @@ export default function App() {
         {tab === 'expenses' && <ExpenseList expenses={data.expenses} budgets={budgets} categories={categories} onSelect={setSelected} myName={myName} />}
         {tab === 'stats' && <AnalyticsPage monthKey={monthKey} data={data} prev={prev} budgets={budgets} categories={categories} />}
         {tab === 'more' && !moreView && <MorePage onOpen={setMoreView} onImport={() => setSheet('import')} onReconcile={() => setSheet('reconcile')} />}
+        {tab === 'more' && moreView === 'customize' && <CustomizePage budgets={budgets} categories={categories} />}
         {tab === 'more' && moreView === 'goals' && <GoalsPage goals={goals} onAdd={() => setSheet('goal')} onOpen={setGoalId} />}
         {tab === 'more' && moreView === 'family' && <SyncPage budgets={budgets} />}
         {tab === 'more' && moreView === 'people' && <PeoplePage monthKey={monthKey} budgets={budgets} meId={myPersonId} onAddIncome={openIncome} />}
