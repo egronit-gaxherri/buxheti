@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Sheet } from './Sheet'
-import { addDebtPayment, deleteDebt, deleteDebtPayment, setDebtSettled } from '../db/actions'
+import { addDebtPayment, deleteDebt, deleteDebtPayment, setDebtBudget, setDebtSettled } from '../db/actions'
 import type { Budget, Debt } from '../db/schema'
 import { daysUntilDue, debtStatus, directionLabel, paidOf, remainingOf } from '../lib/debts'
 import { formatEUR, parseAmount } from '../lib/money'
@@ -44,13 +44,15 @@ export function DebtDetailSheet({ debt, budgets, onClose }: Props) {
     }
   }
 
+  const currentInitialBudget = debt.budgetId ?? ''
+
   return (
     <Sheet title={debt.counterparty} onClose={onClose}>
       <div className="flex flex-col gap-4 p-5">
         <div>
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${lent ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'}`}>{directionLabel(debt)}</span>
           <div className="tabnum mt-3 text-4xl font-bold">{formatEUR(remaining)}</div>
-          <div className="text-sm text-muted">mbetur nga {formatEUR(debt.amount)} · {formatDateSQ(debt.date)}{debt.budgetId ? ` · ${bud(debt.budgetId)}` : ''}</div>
+          <div className="text-sm text-muted">mbetur nga {formatEUR(debt.amount)} · {formatDateSQ(debt.date)}{debt.budgetId ? ` · ${bud(debt.budgetId)}` : ' · pa lëvizje në buxhet'}</div>
           <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-surface-2">
             <div className="h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />
           </div>
@@ -62,6 +64,35 @@ export function DebtDetailSheet({ debt, budgets, onClose }: Props) {
           )}
           {debt.note && <p className="mt-1 text-sm text-muted">{debt.note}</p>}
         </div>
+
+        <section className="space-y-2 rounded-2xl bg-surface-2 p-4">
+          <h3 className="text-xs font-medium text-muted">Ndikimi fillestar në buxhet</h3>
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${budgets.length + 1}, 1fr)` }}>
+            <button
+              onClick={() => run(() => setDebtBudget(debt.id, undefined))}
+              className={`h-10 rounded-xl text-xs font-semibold ${currentInitialBudget === '' ? 'bg-white text-slate-900' : 'bg-bg'}`}
+            >
+              Pa lëvizje
+            </button>
+            {budgets.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => run(() => setDebtBudget(debt.id, b.id))}
+                className="h-10 rounded-xl text-sm font-semibold"
+                style={currentInitialBudget === b.id ? { background: b.color, color: '#0f172a' } : { background: 'var(--color-bg)' }}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+          <p className={`text-xs ${!lent && currentInitialBudget ? 'text-amber-300' : 'text-muted'}`}>
+            {currentInitialBudget
+              ? lent
+                ? `Ky borxh ka zbritur −${formatEUR(debt.amount)} nga ${bud(currentInitialBudget)}.`
+                : `Ky borxh ka shtuar +${formatEUR(debt.amount)} te ${bud(currentInitialBudget)}. Kliko «Pa lëvizje» për ta hequr këtë shumë nga buxheti.`
+              : 'Ky borxh nuk e ka prekur bilancin e asnjë buxheti.'}
+          </p>
+        </section>
 
         {debt.payments.length > 0 && (
           <section>
@@ -89,13 +120,20 @@ export function DebtDetailSheet({ debt, budgets, onClose }: Props) {
               <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Data e pagesës" className="h-12 rounded-xl bg-bg px-2 text-sm outline-none" />
             </div>
             <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${budgets.length + 1}, 1fr)` }}>
+              <button onClick={() => setBudgetId('')} className={`h-10 rounded-xl text-xs font-semibold ${budgetId === '' ? 'bg-white text-slate-900' : 'bg-bg'}`}>Pa lëvizje</button>
               {budgets.map((b) => (
                 <button key={b.id} onClick={() => setBudgetId(b.id)} className="h-10 rounded-xl text-sm font-semibold" style={budgetId === b.id ? { background: b.color, color: '#0f172a' } : { background: 'var(--color-bg)' }}>
                   {b.name}
                 </button>
               ))}
-              <button onClick={() => setBudgetId('')} className={`h-10 rounded-xl text-xs font-semibold ${budgetId === '' ? 'bg-white text-slate-900' : 'bg-bg'}`}>Pa lëvizje</button>
             </div>
+            <p className="text-xs text-muted">
+              {budgetId
+                ? lent
+                  ? `Kur regjistron pagesën, shuma shtohet te ${bud(budgetId)}.`
+                  : `Kur regjistron pagesën, shuma zbritet nga ${bud(budgetId)}.`
+                : 'Vetëm ulet borxhi, pa prekur bilancin e buxheteve.'}
+            </p>
             <button onClick={pay} disabled={(parseAmount(amount) ?? 0) <= 0} className="h-12 w-full rounded-xl bg-white font-bold text-slate-900 disabled:opacity-35">
               Regjistro pagesën
             </button>

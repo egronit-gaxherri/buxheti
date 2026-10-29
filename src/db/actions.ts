@@ -569,6 +569,28 @@ export async function setDebtSettled(debtId: string, settled: boolean): Promise<
   await db.debts.update(debtId, { settled, settledAt: settled ? Date.now() : undefined })
 }
 
+/** Ndryshon ose heq buxhetin ku u regjistrua krijimi i borxhit (p.sh. e kthen në "Pa lëvizje"). */
+export async function setDebtBudget(debtId: string, budgetId?: string): Promise<void> {
+  const target = budgetId || undefined
+  let affectedMonth: string | null = null
+  await db.transaction('rw', db.debts, db.adjustments, async () => {
+    const debt = await db.debts.get(debtId)
+    if (!debt || (debt.budgetId ?? undefined) === target) return
+    affectedMonth = monthKeyOf(debt.date)
+    if (debt.adjustmentId) await db.adjustments.delete(debt.adjustmentId)
+    let adjustmentId: string | undefined
+    if (target) {
+      adjustmentId = newId()
+      await db.adjustments.add({
+        id: adjustmentId, monthKey: affectedMonth, budgetId: target, date: debt.date, createdAt: Date.now(),
+        amount: budgetEffect(debt.direction, 'create', debt.amount), note: debtNote(debt.direction, 'create', debt.counterparty), debtId: debt.id,
+      })
+    }
+    await db.debts.put({ ...debt, budgetId: target, adjustmentId })
+  })
+  if (affectedMonth) await refreshClosedMonthCarry(affectedMonth)
+}
+
 /** Fshin borxhin bashkë me të gjitha lëvizjet e tij në buxhet. */
 export async function deleteDebt(debtId: string): Promise<void> {
   await db.transaction('rw', db.debts, db.adjustments, async () => {

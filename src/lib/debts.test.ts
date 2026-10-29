@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import Dexie from 'dexie'
 import { BudgetDB, db } from '../db/db'
 import { seedIfEmpty } from '../db/seed'
-import { addDebt, addDebtPayment, addIncome, deleteDebt, deleteDebtPayment, remainingFor, setDebtSettled } from '../db/actions'
+import { addDebt, addDebtPayment, addIncome, deleteDebt, deleteDebtPayment, remainingFor, setDebtBudget, setDebtSettled } from '../db/actions'
 import { loadMonthData } from '../db/queries'
 import { monthTotals } from './archive'
 import { budgetEffect, daysUntilDue, debtStatus, debtTotals, remainingOf, sortDebts } from './debts'
@@ -80,9 +80,19 @@ describe('debts (baza)', () => {
     expect(await remainingFor(p.id, '2026-10')).toBe(22000)
   })
 
-  it('mora hua pa lëvizje në buxhet; falja dhe rihapja', async () => {
-    const d = await addDebt({ direction: 'i_owe', counterparty: 'Babi', amount: 10000 })
+  it('mora hua pa lëvizje në buxhet; falja, rihapja dhe ndërrimi i buxhetit fillestar', async () => {
+    const [, p] = await db.budgets.orderBy('order').toArray()
+    const d = await addDebt({ direction: 'i_owe', counterparty: 'Babi', amount: 4000, date: '2026-10-02' })
     expect(await db.adjustments.count()).toBe(0)
+    expect(await remainingFor(p.id, '2026-10')).toBe(0)
+
+    // nëse u lidh me buxhetin Personal (+40 €), setDebtBudget(..., undefined) e kthen në "Pa lëvizje" (0 €)
+    await setDebtBudget(d.id, p.id)
+    expect(await remainingFor(p.id, '2026-10')).toBe(4000)
+    await setDebtBudget(d.id, undefined)
+    expect(await remainingFor(p.id, '2026-10')).toBe(0)
+    expect(await db.adjustments.count()).toBe(0)
+
     await setDebtSettled(d.id, true)
     expect((await db.debts.get(d.id))!.settled).toBe(true)
     await setDebtSettled(d.id, false)
